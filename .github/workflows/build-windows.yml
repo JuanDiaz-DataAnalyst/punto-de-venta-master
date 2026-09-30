@@ -1,0 +1,78 @@
+name: Build Windows
+
+# Genera el ejecutable y el instalador en una máquina Windows de GitHub.
+#  - Manual: pestaña Actions -> "Build Windows" -> Run workflow (descarga en Artifacts).
+#  - Release: al subir un tag vX.Y.Z se publica automáticamente en Releases.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+
+      - name: Instalar dependencias
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Pruebas
+        run: python -m pytest
+
+      - name: Generar ejecutable (PyInstaller)
+        run: python -m PyInstaller packaging/PuntoDeVenta.spec --noconfirm --clean
+
+      - name: Prueba de humo del ejecutable
+        shell: pwsh
+        run: |
+          $env:POS_DATA_DIR = Join-Path $env:RUNNER_TEMP "posdata"
+          $exe = "dist\PuntoDeVentaMASTER\PuntoDeVentaMASTER.exe"
+          $p = Start-Process $exe -ArgumentList "--server", "--port", "8799", "--demo" -PassThru
+          $ok = $false
+          for ($i = 0; $i -lt 60; $i++) {
+            Start-Sleep -Seconds 2
+            try { $r = Invoke-RestMethod http://127.0.0.1:8799/api/estado; if ($r.nombre_negocio) { $ok = $true; break } } catch {}
+          }
+          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          if (-not $ok) {
+            Get-ChildItem -Recurse "$env:POS_DATA_DIR\logs" | Get-Content -ErrorAction SilentlyContinue
+            throw "El ejecutable no respondió"
+          }
+          Write-Host "Ejecutable OK: $($r.app) v$($r.version)"
+
+      - name: Instalar Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Generar instalador
+        shell: pwsh
+        run: |
+          $ver = if ($env:GITHUB_REF_TYPE -eq "tag") { $env:GITHUB_REF_NAME.TrimStart("v") } else { "0.0.0-dev" }
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$ver" packaging\installer.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup falló" }
+          Compress-Archive -Path dist\PuntoDeVentaMASTER\* -DestinationPath "PuntoDeVentaMASTER-$ver-portable.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PuntoDeVentaMASTER-windows
+          path: |
+            instalador/*.exe
+            PuntoDeVentaMASTER-*-portable.zip
+
+      - name: Publicar release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            instalador/*.exe
+            PuntoDeVentaMASTER-*-portable.zip
+          generate_release_notes: true
