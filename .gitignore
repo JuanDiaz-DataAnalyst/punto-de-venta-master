@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Empaquetado
+build/
+dist/
+instalador/
+*-portable.zip
+
+# Datos locales (la app guarda sus datos en %LOCALAPPDATA%, esto es por si se usa POS_DATA_DIR local)
+*.db
+*.db-wal
+*.db-shm
+data/
+exportaciones/
+respaldos/
+logs/
+
+# Editores / SO
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Claude Code (configuración personal)
+.claude/settings.local.json

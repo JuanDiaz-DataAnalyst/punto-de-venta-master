@@ -1,0 +1,8 @@
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.iss text eol=crlf
+*.png binary
+*.ico binary
+*.db binary
+app/static/vendor/** -diff linguist-vendored

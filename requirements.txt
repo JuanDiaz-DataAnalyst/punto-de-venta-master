@@ -1,0 +1,5 @@
+# Todas son librerías gratuitas y de código abierto (MIT / BSD)
+fastapi>=0.110
+uvicorn>=0.29
+pywebview>=5.0
+openpyxl>=3.1

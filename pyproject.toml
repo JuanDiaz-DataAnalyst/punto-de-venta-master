@@ -1,0 +1,40 @@
+[project]
+name = "punto-de-venta-master"
+version = "1.0.0"
+description = "Punto de venta de escritorio para micro y pequeños negocios de comida: ventas, backflush de inventario, caja y dashboard."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "Juan Díaz Vega" }]
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "pywebview>=5.0",
+    "openpyxl>=3.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "httpx>=0.27", "ruff>=0.6", "pyinstaller>=6.5"]
+
+# ----------------------------------------------------------------- ruff
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["app/static", "packaging"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM"]
+ignore = [
+    "B008",   # Depends() en argumentos por defecto es el patrón de FastAPI
+    "E501",   # el largo de línea lo controla `ruff format`; las consultas SQL se dejan legibles
+    "E702",   # varias sentencias cortas en una línea en filtros SQL
+    "SIM108",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+# ----------------------------------------------------------------- pytest
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
