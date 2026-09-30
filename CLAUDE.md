@@ -1,0 +1,59 @@
+# CLAUDE.md — guía del proyecto para Claude Code
+
+Punto de venta de escritorio (Windows) para micro/pequeños negocios de comida. Todo el texto de la UI,
+mensajes de error, comentarios y documentación va **en español (México)**; nombres de tablas/columnas
+también en español.
+
+## Stack
+- Python 3.11+ · FastAPI + Uvicorn (API local en `127.0.0.1:8765`) · SQLite (módulo `sqlite3`, sin ORM)
+- Frontend: HTML/CSS/JS con módulos ES **sin build ni framework**; Chart.js vendorizado en `app/static/vendor/`
+- Ventana de escritorio con pywebview (WebView2). Empaquetado con PyInstaller + Inno Setup.
+- La app debe funcionar **100 % offline**: no agregar CDNs, fuentes web ni llamadas a internet.
+
+## Comandos
+```bash
+python -m pip install -r requirements-dev.txt     # dependencias (usar .venv)
+python -m pytest                                  # pruebas (BD temporal por prueba)
+ruff check . && ruff format --check .             # lint/formato (obligatorio antes de commit)
+python -m app.main --server                       # solo API; docs en /api/docs
+python -m app.main --browser --demo               # app en navegador con datos de ejemplo (BD vacía)
+POS_DATA_DIR=/tmp/pos python -m app.main --server # usar otra carpeta de datos
+pyinstaller packaging/PuntoDeVenta.spec --noconfirm   # ejecutable (solo en Windows)
+```
+En Windows: `scripts\build.bat` (lint + pruebas + exe + instalador) y `scripts\dev.bat`.
+
+## Mapa del código
+- `app/main.py` arranque (servidor en hilo + ventana), respaldo automático al iniciar
+- `app/server.py` app FastAPI, manejadores de error, monta `/static`
+- `app/db.py` **esquema completo, vistas analíticas**, `init_db`, `audit`, respaldos
+- `app/services.py` **reglas de negocio**: `registrar_venta` (backflush), `cancelar_venta`,
+  `mover_inventario` (costo promedio ponderado), `registrar_entrada`, `ajustar_inventario`, `resumen_turno`
+- `app/routers/*.py` endpoints delgados; validan con Pydantic y llaman a `services`
+- `app/security.py` PBKDF2 + sesiones en memoria; dependencias `current_user` / `require_admin`
+- `app/static/js/app.js` router por hash y layout; `js/views/*.js` una pantalla por archivo; `js/ui.js` helpers
+- `tests/conftest.py` fixtures: `client`, `admin`, `cajero`, `catalogo`, `turno`, `vender`, `stock`
+
+## Reglas de negocio que no se deben romper
+1. Toda modificación de existencias pasa por `services.mover_inventario` (deja rastro en el kardex
+   `fact_movimientos_inventario`). Nunca hacer `UPDATE dim_insumo SET stock_actual` directo.
+2. Invariante: `dim_insumo.stock_actual == SUM(fact_movimientos_inventario.cantidad)` por insumo.
+3. Los precios se leen de la BD en el servidor; nunca confiar en precios enviados por el cliente.
+4. Una venta solo se registra con turno abierto; cancelar revierte exactamente el backflush original.
+5. Los descuentos se prorratean por renglón para que `SUM(fact_ventas.importe_neto) == ventas.total`.
+6. Operaciones con varias escrituras van en una transacción (`with conn:` o `BEGIN IMMEDIATE`).
+7. Acciones relevantes se registran con `db.audit(...)`.
+8. Endpoints de administración usan `Depends(require_admin)`; agregar la prueba en `tests/test_permisos.py`.
+
+## Convenciones
+- Commits: Conventional Commits en español (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `build:`, `ci:`).
+- Ramas: `feat/…`, `fix/…`; PR a `main` con CI en verde. Versiones con tags `vX.Y.Z` (dispara el build del .exe).
+- Cambios de esquema: agregar migración idempotente en `db.init_db` y subir `SCHEMA_VERSION`; nunca borrar
+  columnas con datos. Documentar en `docs/modelo-de-datos.md` y `CHANGELOG.md`.
+- Cada bug corregido lleva una prueba que lo reproduce.
+- Frontend: escapar todo texto de usuario con `esc()` antes de meterlo a `innerHTML`.
+- Colores de gráficas: usar la paleta validada definida en `js/views/dashboard.js` (no inventar colores).
+
+## Limitaciones conocidas
+- Un solo equipo (SQLite). Varias terminales requeriría migrar a PostgreSQL.
+- Las sesiones viven en memoria: reiniciar la app cierra sesiones (intencional).
+- La impresión usa el diálogo de Windows (`window.print()` en un iframe); no hay ESC/POS directo.
