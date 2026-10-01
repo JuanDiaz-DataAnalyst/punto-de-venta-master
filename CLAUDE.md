@@ -28,7 +28,7 @@ En Windows: `scripts\build.bat` (lint + pruebas + exe + instalador) y `scripts\d
 - `app/db.py` **esquema completo, vistas analíticas**, `init_db`, `audit`, respaldos
 - `app/services.py` **reglas de negocio**: `registrar_venta` (backflush), `cancelar_venta`,
   `mover_inventario` (costo promedio ponderado), `registrar_entrada`, `ajustar_inventario`, `resumen_turno`,
-  cuentas por mesa (`abrir_cuenta`, `agregar_item`, `cobrar_cuenta`, `cancelar_cuenta`), `siguiente_folio`,
+  cuentas por mesa (`abrir_cuenta`, `agregar_item`, `cobrar_cuenta`, `cancelar_cuenta`, `mover_consumos`), `siguiente_folio`,
   `prorratear_gastos` (gastos fijos por día para el dashboard)
 - `app/routers/*.py` endpoints delgados; validan con Pydantic y llaman a `services`
 - `app/security.py` PBKDF2 + sesiones en memoria; dependencias `current_user` / `require_admin`

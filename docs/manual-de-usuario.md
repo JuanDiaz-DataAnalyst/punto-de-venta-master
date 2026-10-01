@@ -33,6 +33,10 @@ Atajos del punto de venta: **F2** buscar · **F4** nueva mesa · **F9** descuent
 - **Cambiar mesa** corrige el número; **Cancelar** descarta una cuenta (pide motivo si ya tiene consumos y queda en
   auditoría). Una mesa libre puede reutilizar su número, pero el folio nunca se repite.
 - El inventario se descuenta al **cobrar**, no al agregar productos.
+- **Pre-cuenta**: imprime la cuenta para que el cliente la revise antes de pagar; no es comprobante y no cierra la mesa.
+- **Dividir / mover**: elige cuántas piezas de cada producto pasan a una **cuenta nueva** (con su propio folio, para
+  cobrar por separado) o a **otra mesa abierta**. Las notas viajan con el producto y el descuento se queda en la
+  cuenta original.
 - No se puede cerrar el turno de caja mientras haya mesas abiertas.
 - Para una venta al mostrador abre una pestaña con el nombre que quieras (por ejemplo «Llevar 1»).
 

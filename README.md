@@ -17,7 +17,7 @@ y está construido con software gratuito.
 
 - **Venta rápida y mesas**: un ticket abierto por mesa en pestañas (varias a la vez), con folio único por ticket;
   categorías, búsqueda por código, notas por platillo, descuentos, efectivo con cambio, tarjeta y transferencia,
-  ticket térmico 58/80 mm. Atajos F2 / F4 / F9 / F12.
+  pre-cuenta, dividir cuenta o pasar consumos entre mesas, ticket térmico 58/80 mm. Atajos F2 / F4 / F9 / F12.
 - **Backflush automático**: cada venta descuenta los insumos de su receta al costo promedio y guarda el
   costo real (COGS) y el margen por renglón. Cancelar revierte exactamente el consumo.
 - **Inventario**: entradas de material con costo promedio ponderado, ajustes manuales con motivo, conteo

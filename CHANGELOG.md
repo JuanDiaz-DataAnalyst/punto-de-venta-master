@@ -16,6 +16,10 @@ Todos los cambios relevantes se documentan aquí. Formato basado en
 - **Dashboard**: gastos fijos prorrateados por día, utilidad operativa, punto de equilibrio, costo laboral,
   prime cost, estado de resultados y gastos por categoría. La gráfica de tendencia agrega la utilidad.
 - Exportación de gastos fijos a Excel/CSV.
+- **Pre-cuenta**: imprime la cuenta de una mesa abierta para que el cliente la revise antes de pagar
+  (marcada «No es comprobante de pago»; queda en auditoría y no cierra la cuenta ni mueve inventario).
+- **Dividir cuenta / pasar consumos**: mueve piezas de una mesa a una cuenta nueva (con su propio folio) o a otra
+  mesa abierta, conservando las notas. El descuento se queda en la cuenta original.
 - El tipo de usuario (Admin / User) se elige en un menú desplegable con su descripción.
 
 ### Cambiado

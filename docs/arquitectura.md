@@ -62,7 +62,8 @@ sequenceDiagram
 Una mesa es una fila de `cuentas` con sus renglones en `cuenta_items`. El folio se toma de un consecutivo
 compartido (`services.siguiente_folio`) al abrir la cuenta; al cobrar, `services.cobrar_cuenta` llama a
 `registrar_venta` con ese mismo folio y la mesa, de modo que el flujo anterior (backflush, costo, margen)
-ocurre en ese momento. El estado de las pestañas vive en el servidor: el frontend solo recuerda cuál está activa.
+ocurre en ese momento. `services.mover_consumos` divide una cuenta o pasa consumos a otra mesa (la cuenta nueva trae su
+propio folio); `GET /api/cuentas/{id}/precuenta` imprime la cuenta abierta con `ticket.render_ticket(precuenta=True)`. El estado de las pestañas vive en el servidor: el frontend solo recuerda cuál está activa.
 
 ## Gastos fijos
 

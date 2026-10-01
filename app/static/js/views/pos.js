@@ -47,6 +47,9 @@ export async function render(view) {
           <div class="sum-row"><button class="btn sm ghost" id="pos-desc" style="padding:2px 6px;margin-left:-6px">Descuento <span class="kbd">F9</span></button><span id="pos-descv" class="num"></span></div>
           <div class="sum-total"><span>Total</span><span id="pos-total" class="num"></span></div>
           <div class="pay-methods" id="pos-metodos"></div>
+          <div class="row" style="gap:6px">
+            <button class="btn sm grow" id="pos-pre" title="Imprimir la cuenta para que el cliente la revise antes de pagar">Pre-cuenta</button>
+            <button class="btn sm grow" id="pos-split" title="Dividir la cuenta o pasar consumos a otra mesa">Dividir / mover</button></div>
           <button class="btn primary xl block" id="pos-cobrar">Cobrar <span class="kbd" style="color:#fff;border-color:#ffffff66;background:transparent">F12</span></button>
         </div>
       </aside>
@@ -69,6 +72,8 @@ export async function render(view) {
   $("#pos-mesa").onclick = cambiarMesa;
   $("#pos-cancel").onclick = cancelarCuenta;
   $("#pos-desc").onclick = pedirDescuento;
+  $("#pos-pre").onclick = imprimirPrecuenta;
+  $("#pos-split").onclick = dividir;
   $("#pos-cobrar").onclick = cobrar;
 
   const onKey = (e) => {
@@ -211,6 +216,69 @@ async function cancelarCuenta() {
   if (await llamar(() => post(`/cuentas/${c.cuenta_id}/cancelar`, { motivo }))) toast("Cuenta cancelada");
 }
 
+async function imprimirPrecuenta() {
+  const c = cuenta();
+  if (!c || !c.items.length) return;
+  try {
+    await enCola(async () => {}); // que ya estén guardados los últimos cambios
+    printHTML(await api(`/cuentas/${c.cuenta_id}/precuenta`, { raw: true }));
+  } catch (e) { toastErr(e); }
+}
+
+// Dividir la cuenta (hacia una cuenta nueva con su propio folio) o pasar consumos a otra mesa abierta
+function dividir() {
+  const c = cuenta();
+  if (!c || !c.items.length) return;
+  const otras = cuentas.filter((x) => x.cuenta_id !== c.cuenta_id);
+  const usadas = new Set(cuentas.map((x) => x.mesa.toLowerCase()));
+  const sugerida = usadas.has(`${c.mesa}-b`.toLowerCase()) ? siguienteMesa() : `${c.mesa}-B`;
+  const m = modal({
+    title: `Dividir o mover · ${mesaTitulo(c.mesa)}`,
+    body: `<div class="stack">
+      <p class="hint" style="margin:0">Indica cuántas piezas de cada producto pasan a la otra cuenta.</p>
+      <div>${c.items.map((i) => `<div class="row" style="padding:7px 0;border-bottom:1px dashed var(--line)">
+        <div class="grow"><b>${esc(i.nombre)}</b><div class="hint">${i.nota ? esc(i.nota) + " · " : ""}${i.cantidad} en la cuenta · ${money(i.precio)} c/u</div></div>
+        <input class="input" type="number" min="0" max="${i.cantidad}" step="1" value="0" data-i="${i.item_id}" aria-label="Piezas de ${esc(i.nombre)} a mover" style="width:78px;text-align:right">
+        <button class="btn sm" data-all="${i.item_id}">Todo</button></div>`).join("")}</div>
+      <label class="f">Destino<select class="input" id="mv-dest">
+        <option value="">Cuenta nueva (dividir la cuenta)</option>
+        ${otras.map((o) => `<option value="${o.cuenta_id}">Pasar a ${esc(mesaTitulo(o.mesa))} · ${esc(o.folio)}</option>`).join("")}</select></label>
+      <label class="f" id="mv-nueva">Nombre de la cuenta nueva<input class="input" id="mv-mesa" maxlength="30" value="${esc(sugerida)}"></label>
+      <div class="row"><span class="grow ink2">Piezas a mover</span><b id="mv-n">0</b></div>
+      <p class="hint" style="margin:0">La cuenta nueva tendrá su propio folio y se cobra por separado. El descuento se queda en la cuenta original.</p></div>`,
+    footer: `<button class="btn" data-c>Cancelar</button><button class="btn primary" data-ok disabled>Mover</button>`,
+  });
+  const inputs = $$("[data-i]", m.el);
+  const ok = $("[data-ok]", m.el);
+  const dest = $("#mv-dest", m.el);
+  const elegidos = () => inputs.map((i) => ({ item_id: +i.dataset.i, cantidad: Math.min(Math.max(Number(i.value || 0), 0), +i.max) })).filter((x) => x.cantidad > 0);
+  const actualizar = () => {
+    const n = elegidos().reduce((s, x) => s + x.cantidad, 0);
+    $("#mv-n", m.el).textContent = n;
+    $("#mv-nueva", m.el).classList.toggle("hidden", !!dest.value);
+    ok.disabled = !n;
+  };
+  inputs.forEach((i) => i.addEventListener("input", actualizar));
+  $$("[data-all]", m.el).forEach((b) => b.onclick = () => { const i = $(`[data-i="${b.dataset.all}"]`, m.el); i.value = i.max; actualizar(); });
+  dest.onchange = actualizar;
+  $("[data-c]", m.el).onclick = () => m.close();
+  ok.onclick = async () => {
+    ok.disabled = true;
+    const body = { items: elegidos(), ...(dest.value ? { destino_cuenta_id: +dest.value } : { destino_mesa: $("#mv-mesa", m.el).value.trim() }) };
+    try {
+      const r = await enCola(() => post(`/cuentas/${c.cuenta_id}/mover`, body));
+      m.close();
+      reemplazar(r.origen); reemplazar(r.destino);
+      activaId = r.destino.cuenta_id; pintarTabs(); pintarCarrito();
+      toast(`Consumos pasados a ${mesaTitulo(r.destino.mesa)} (${r.destino.folio})`);
+    } catch (e) {
+      ok.disabled = false;
+      toastErr(e);
+      if (e.status === 404) { m.close(); refrescarCuentas(); }
+    }
+  };
+}
+
 // ---------- menú ----------
 function pintarCategorias() {
   const el = $("#pos-cats");
@@ -303,6 +371,8 @@ function pintarCarrito() {
   $("#pos-total").textContent = money(c?.total);
   $("#pos-cobrar").disabled = !c || !c.items.length;
   $("#pos-desc").disabled = !c || !c.items.length;
+  $("#pos-pre").disabled = !c || !c.items.length;
+  $("#pos-split").disabled = !c || !c.items.length;
 }
 
 async function accionItem(a, idx) {

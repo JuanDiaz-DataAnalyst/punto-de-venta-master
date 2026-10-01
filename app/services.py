@@ -581,7 +581,11 @@ def agregar_item(
         raise ErrorNegocio("Cantidad inválida")
     if not conn.execute("SELECT 1 FROM dim_producto WHERE producto_id=? AND activo=1", (producto_id,)).fetchone():
         raise ErrorNegocio(f"Producto {producto_id} no disponible")
-    nota = (nota or "").strip() or None
+    _sumar_item(conn, cuenta_id, producto_id, cantidad, (nota or "").strip() or None, fecha_hora or now_str())
+
+
+def _sumar_item(conn, cuenta_id: int, producto_id: int, cantidad: float, nota: str | None, agregado_en: str) -> None:
+    """Agrega piezas a la cuenta; si ya hay un renglón igual (mismo producto y nota) las suma a ese."""
     existente = conn.execute(
         "SELECT item_id FROM cuenta_items WHERE cuenta_id=? AND producto_id=? AND COALESCE(nota,'')=COALESCE(?,'')",
         (cuenta_id, producto_id, nota),
@@ -593,7 +597,7 @@ def agregar_item(
     else:
         conn.execute(
             "INSERT INTO cuenta_items(cuenta_id, producto_id, cantidad, nota, agregado_en) VALUES (?,?,?,?,?)",
-            (cuenta_id, producto_id, cantidad, nota, fecha_hora or now_str()),
+            (cuenta_id, producto_id, cantidad, nota, agregado_en),
         )
 
 
@@ -655,6 +659,71 @@ def actualizar_cuenta(
         )
         if valor != c["descuento_valor"] or tipo != c["descuento_tipo"]:
             audit(conn, usuario_id, "DESCUENTO_CUENTA", "cuentas", cuenta_id, f"{c['folio']}: {valor}{tipo}")
+
+
+def mover_consumos(
+    conn,
+    cuenta_id: int,
+    usuario_id: int,
+    items: list[dict],
+    destino_cuenta_id: int | None = None,
+    destino_mesa: str | None = None,
+    fecha_hora: str | None = None,
+) -> tuple[int, int]:
+    """Pasa consumos de una cuenta abierta a otra mesa abierta o a una cuenta nueva (dividir la cuenta).
+
+    items: [{"item_id", "cantidad"}] (se pueden mover solo algunas piezas de un renglón).
+    Con destino_mesa se abre una cuenta nueva (con su propio folio). El descuento se queda en la cuenta de origen.
+    Regresa (cuenta_origen_id, cuenta_destino_id).
+    """
+    if (destino_cuenta_id is None) == (not (destino_mesa or "").strip()):
+        raise ErrorNegocio("Elige una mesa abierta de destino o escribe el nombre de la cuenta nueva")
+    origen = _cuenta(conn, cuenta_id)
+    pedidas: dict[int, float] = {}
+    for it in items:
+        cant = float(it.get("cantidad") or 0)
+        if cant < 0:
+            raise ErrorNegocio("Cantidad inválida")
+        if cant > 0:
+            pedidas[int(it["item_id"])] = pedidas.get(int(it["item_id"]), 0) + cant
+    if not pedidas:
+        raise ErrorNegocio("Elige al menos un producto para mover")
+    renglones = {
+        r["item_id"]: r for r in conn.execute("SELECT * FROM cuenta_items WHERE cuenta_id=?", (cuenta_id,)).fetchall()
+    }
+    for item_id, cant in pedidas.items():
+        if item_id not in renglones:
+            raise ErrorNegocio("Renglón no encontrado", 404)
+        if cant > renglones[item_id]["cantidad"] + 1e-9:
+            raise ErrorNegocio("No puedes mover más piezas de las que tiene la cuenta")
+    if destino_cuenta_id is not None:
+        if destino_cuenta_id == cuenta_id:
+            raise ErrorNegocio("La cuenta de destino debe ser otra")
+        destino = _cuenta(conn, destino_cuenta_id)
+        destino_id = destino["cuenta_id"]
+    else:
+        destino_id = abrir_cuenta(conn, usuario_id, destino_mesa, fecha_hora)
+        destino = _cuenta(conn, destino_id)
+    piezas = 0.0
+    for item_id, cant in pedidas.items():
+        r = renglones[item_id]
+        resto = r["cantidad"] - cant
+        if resto <= 1e-9:
+            conn.execute("DELETE FROM cuenta_items WHERE item_id=?", (item_id,))
+        else:
+            conn.execute("UPDATE cuenta_items SET cantidad=? WHERE item_id=?", (resto, item_id))
+        _sumar_item(conn, destino_id, r["producto_id"], cant, r["nota"], r["agregado_en"])
+        piezas += cant
+    audit(
+        conn,
+        usuario_id,
+        "MOVER_CONSUMOS",
+        "cuentas",
+        cuenta_id,
+        f"{piezas:g} piezas de {origen['folio']} (mesa {origen['mesa']}) a {destino['folio']} (mesa {destino['mesa']})",
+        fecha_hora,
+    )
+    return cuenta_id, destino_id
 
 
 def cobrar_cuenta(
