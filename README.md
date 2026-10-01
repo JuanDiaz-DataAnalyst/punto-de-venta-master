@@ -90,7 +90,7 @@ docs/                                  arquitectura, modelo de datos, manual, ca
 ```
 
 ## Instalar en computadoras de clientes
-1. Consigue el instalador de Windows: se publica solo en [Releases](../../releases) al subir una etiqueta `vX.Y.Z`
+1. Consigue el instalador de Windows: se publica solo en [Releases](https://github.com/JuanDiaz-DataAnalyst/punto-de-venta-master/releases) al subir una etiqueta `vX.Y.Z`
    (o ejecuta el workflow **Build Windows** en la pestaña Actions).
 2. Genera el kit con `python scripts/empaquetar_kit.py` (opcionalmente `--instalador ruta\Instalar_PuntoDeVentaMASTER_X.Y.Z.exe`).
    Crea `kit-instalacion/` y un `.zip` con la guía de instalación, el manual, el checklist de entrega, herramientas y el código fuente.
