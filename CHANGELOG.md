@@ -4,6 +4,24 @@ Todos los cambios relevantes se documentan aquí. Formato basado en
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
+### Agregado
+- **Cuentas abiertas por mesa**: varios tickets independientes a la vez, en pestañas cuyo título es el número
+  de mesa. Se pueden seguir agregando consumos mientras los comensales están en la mesa; el inventario se
+  descuenta (backflush) hasta el cobro. Atajo **F4** para abrir una mesa.
+- **Folio único por ticket**: el folio se asigna al abrir la cuenta con un consecutivo compartido por mesas
+  y ventas directas; nunca se reutiliza, ni siquiera si la cuenta se cancela. La venta conserva ese folio.
+- La mesa se muestra en el ticket impreso, en el historial de ventas (con búsqueda) y en `v_ventas_detalle`.
+- **Gastos fijos mensuales** (Admin → Gastos fijos): nómina, renta, luz, agua, gas, etc. con vigencia y
+  plantilla de conceptos comunes de un restaurante pequeño.
+- **Dashboard**: gastos fijos prorrateados por día, utilidad operativa, punto de equilibrio, costo laboral,
+  prime cost, estado de resultados y gastos por categoría. La gráfica de tendencia agrega la utilidad.
+- Exportación de gastos fijos a Excel/CSV.
+- El tipo de usuario (Admin / User) se elige en un menú desplegable con su descripción.
+
+### Cambiado
+- Cerrar el turno de caja se bloquea mientras haya cuentas abiertas.
+- Esquema v2 (migración automática): `ventas.mesa`, tablas `cuentas`, `cuenta_items` y `gastos_fijos`,
+  y consecutivo de folios en `config.folio_consecutivo` (arranca en el último folio existente).
 
 ## [1.0.0] - 2026-09-30
 ### Agregado

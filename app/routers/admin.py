@@ -204,7 +204,7 @@ EXPORTS = {
         "Tickets",
         """SELECT v.folio, v.fecha_hora, u.nombre AS usuario, m.nombre AS metodo_pago, v.subtotal,
                     v.descuento, v.total, v.costo_total, ROUND(v.total - v.costo_total, 2) AS margen, v.estado,
-                    v.motivo_cancelacion, v.turno_id, v.cliente
+                    v.motivo_cancelacion, v.turno_id, v.cliente, v.mesa
                  FROM ventas v JOIN dim_usuario u ON u.usuario_id=v.usuario_id
                  JOIN dim_metodo_pago m ON m.metodo_pago_id=v.metodo_pago_id
                  WHERE date(v.fecha_hora) BETWEEN :desde AND :hasta ORDER BY v.fecha_hora""",
@@ -237,6 +237,11 @@ EXPORTS = {
                  FROM turnos t JOIN dim_usuario ua ON ua.usuario_id=t.usuario_apertura_id
                  LEFT JOIN dim_usuario uc ON uc.usuario_id=t.usuario_cierre_id
                  WHERE date(t.apertura) BETWEEN :desde AND :hasta ORDER BY t.turno_id""",
+    ),
+    "gastos_fijos": (
+        "Gastos fijos",
+        """SELECT concepto, categoria, monto_mensual, vigente_desde, vigente_hasta, notas
+                 FROM gastos_fijos ORDER BY categoria, concepto""",
     ),
     "auditoria": (
         "Auditoría",

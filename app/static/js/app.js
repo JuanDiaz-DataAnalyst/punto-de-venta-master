@@ -12,6 +12,7 @@ const ROUTES = [
   { sec: "Administración", admin: true },
   { path: "dashboard", label: "Dashboard", icon: "dash", mod: "./views/dashboard.js", admin: true },
   { path: "catalogo", label: "Menú y recetas", icon: "cat", mod: "./views/catalogo.js", admin: true },
+  { path: "gastos", label: "Gastos fijos", icon: "gasto", mod: "./views/gastos.js", admin: true },
   { path: "usuarios", label: "Usuarios", icon: "users", mod: "./views/usuarios.js", admin: true },
   { path: "reportes", label: "Reportes y respaldos", icon: "rep", mod: "./views/reportes.js", admin: true },
   { path: "config", label: "Configuración", icon: "cfg", mod: "./views/config.js", admin: true },

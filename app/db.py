@@ -16,7 +16,7 @@ from pathlib import Path
 
 from . import config
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -155,7 +155,8 @@ CREATE TABLE IF NOT EXISTS ventas (
     cancelada_por      INTEGER REFERENCES dim_usuario(usuario_id),
     motivo_cancelacion TEXT,
     cliente            TEXT,
-    notas              TEXT
+    notas              TEXT,
+    mesa               TEXT                          -- mesa / cuenta de origen (NULL en ventas directas)
 );
 
 -- TABLA DE HECHOS PRINCIPAL: grano = un renglón de producto vendido
@@ -185,6 +186,49 @@ CREATE INDEX IF NOT EXISTS ix_fv_producto ON fact_ventas(producto_id);
 CREATE INDEX IF NOT EXISTS ix_fv_venta    ON fact_ventas(venta_id);
 CREATE INDEX IF NOT EXISTS ix_v_fecha     ON ventas(fecha_id);
 CREATE INDEX IF NOT EXISTS ix_v_turno     ON ventas(turno_id);
+
+-- ======================= CUENTAS ABIERTAS (MESAS) =======================
+-- Una cuenta es un ticket abierto por mesa. El folio se asigna al abrirla y es el mismo
+-- con el que se registra la venta al cobrar. El inventario NO se mueve hasta el cobro.
+CREATE TABLE IF NOT EXISTS cuentas (
+    cuenta_id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    folio           TEXT NOT NULL UNIQUE,
+    mesa            TEXT NOT NULL,
+    estado          TEXT NOT NULL DEFAULT 'ABIERTA' CHECK (estado IN ('ABIERTA','COBRADA','CANCELADA')),
+    abierta_en      TEXT NOT NULL,
+    usuario_id      INTEGER NOT NULL REFERENCES dim_usuario(usuario_id),
+    descuento_tipo  TEXT NOT NULL DEFAULT '$' CHECK (descuento_tipo IN ('$','%')),
+    descuento_valor REAL NOT NULL DEFAULT 0 CHECK (descuento_valor >= 0),
+    cerrada_en      TEXT,
+    venta_id        INTEGER REFERENCES ventas(venta_id),
+    motivo_cancelacion TEXT
+);
+-- una sola cuenta abierta por mesa
+CREATE UNIQUE INDEX IF NOT EXISTS ux_cuentas_mesa_abierta ON cuentas(mesa COLLATE NOCASE) WHERE estado = 'ABIERTA';
+
+CREATE TABLE IF NOT EXISTS cuenta_items (
+    item_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    cuenta_id   INTEGER NOT NULL REFERENCES cuentas(cuenta_id) ON DELETE CASCADE,
+    producto_id INTEGER NOT NULL REFERENCES dim_producto(producto_id),
+    cantidad    REAL NOT NULL CHECK (cantidad > 0),
+    nota        TEXT,
+    agregado_en TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_ci_cuenta ON cuenta_items(cuenta_id);
+
+-- ======================= GASTOS FIJOS MENSUALES =======================
+-- Monto mensual de cada gasto con su vigencia; el dashboard lo prorratea por día.
+CREATE TABLE IF NOT EXISTS gastos_fijos (
+    gasto_id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    concepto       TEXT NOT NULL,
+    categoria      TEXT NOT NULL,
+    monto_mensual  REAL NOT NULL DEFAULT 0 CHECK (monto_mensual >= 0),
+    vigente_desde  TEXT NOT NULL,                 -- AAAA-MM-DD
+    vigente_hasta  TEXT,                          -- NULL = sigue vigente
+    notas          TEXT,
+    creado_en      TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    actualizado_en TEXT
+);
 
 -- ======================= INVENTARIO =======================
 CREATE TABLE IF NOT EXISTS entradas_inventario (
@@ -232,7 +276,7 @@ CREATE INDEX IF NOT EXISTS ix_log_fecha ON log_auditoria(fecha_hora);
 -- ======================= VISTAS ANALÍTICAS (listas para Power BI / Excel) =======================
 DROP VIEW IF EXISTS v_ventas_detalle;
 CREATE VIEW v_ventas_detalle AS
-SELECT f.linea_id, v.folio, f.venta_id, f.fecha_hora, d.fecha, d.anio, d.mes, d.nombre_mes,
+SELECT f.linea_id, v.folio, v.mesa, f.venta_id, f.fecha_hora, d.fecha, d.anio, d.mes, d.nombre_mes,
        d.semana_iso, d.nombre_dia, d.dia_semana, f.hora,
        p.codigo AS producto_codigo, p.nombre AS producto, c.nombre AS categoria,
        u.nombre AS usuario, m.nombre AS metodo_pago, f.turno_id,
@@ -389,12 +433,30 @@ def _poblar_dim_fecha(conn: sqlite3.Connection, inicio: date, fin: date) -> None
     conn.executemany("INSERT OR IGNORE INTO dim_fecha VALUES (?,?,?,?,?,?,?,?,?,?,?)", rows)
 
 
+def _columnas(conn: sqlite3.Connection, tabla: str) -> set[str]:
+    return {r["name"] for r in conn.execute(f"PRAGMA table_info({tabla})")}
+
+
+def _migrar_antes(conn: sqlite3.Connection) -> None:
+    """Migraciones idempotentes que deben correr antes de crear vistas e índices nuevos."""
+    cols = _columnas(conn, "ventas")
+    if cols and "mesa" not in cols:  # v1 -> v2: la tabla existe pero aún no tiene la columna
+        conn.execute("ALTER TABLE ventas ADD COLUMN mesa TEXT")
+
+
 def init_db(path: Path | None = None) -> None:
     config.ensure_dirs()
     conn = connect(path)
     try:
+        _migrar_antes(conn)
         conn.executescript(SCHEMA)
         with conn:
+            # El consecutivo de folios es compartido por cuentas abiertas y ventas directas.
+            # En bases anteriores arranca en el último venta_id para no repetir folios existentes.
+            conn.execute(
+                "INSERT OR IGNORE INTO config(clave, valor) "
+                "SELECT 'folio_consecutivo', CAST(COALESCE(MAX(venta_id), 0) AS TEXT) FROM ventas"
+            )
             for k, v in DEFAULT_CONFIG.items():
                 conn.execute("INSERT OR IGNORE INTO config(clave, valor) VALUES (?,?)", (k, v))
             conn.execute(

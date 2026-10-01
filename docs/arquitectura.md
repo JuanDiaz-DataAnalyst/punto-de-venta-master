@@ -57,6 +57,19 @@ sequenceDiagram
     C->>A: GET /ventas/{id}/ticket → imprimir
 ```
 
+## Cuentas abiertas por mesa
+
+Una mesa es una fila de `cuentas` con sus renglones en `cuenta_items`. El folio se toma de un consecutivo
+compartido (`services.siguiente_folio`) al abrir la cuenta; al cobrar, `services.cobrar_cuenta` llama a
+`registrar_venta` con ese mismo folio y la mesa, de modo que el flujo anterior (backflush, costo, margen)
+ocurre en ese momento. El estado de las pestañas vive en el servidor: el frontend solo recuerda cuál está activa.
+
+## Gastos fijos
+
+`gastos_fijos` guarda monto mensual y vigencia. `services.prorratear_gastos` los reparte por día
+(monto ÷ días del mes) y el dashboard los resta al margen bruto: utilidad = margen − gastos del periodo,
+punto de equilibrio = gastos ÷ margen %.
+
 ## Frontend
 
 - SPA sin framework ni build: `index.html` carga `js/app.js` (módulo ES) que enruta por hash (`#/pos`,

@@ -82,7 +82,7 @@ async function cargar() {
   let d;
   try { d = await get("/dashboard", { desde: rango.desde, hasta: rango.hasta }); } catch (e) { return toastErr(e); }
   destroyCharts();
-  const k = d.kpis, p = d.kpis_anterior, inv = d.inventario;
+  const k = d.kpis, p = d.kpis_anterior, inv = d.inventario, gf = d.gastos_fijos;
   const foodCost = k.ventas ? k.costo / k.ventas : 0, foodCostAnt = p.ventas ? p.costo / p.ventas : 0;
   $("#d-sub").textContent = `${fmtShortDate(d.rango.desde)} – ${fmtShortDate(d.rango.hasta)} (${d.rango.dias} días) · comparado con ${fmtShortDate(d.rango.anterior_desde)} – ${fmtShortDate(d.rango.anterior_hasta)}`;
   const body = $("#d-body");
@@ -103,11 +103,21 @@ async function cargar() {
       <div class="card kpi"><div class="l">Descuentos</div><div class="v" style="font-size:20px">${money0(k.descuentos)}</div><div class="d">${k.ventas ? pct(k.descuentos / (k.ventas + k.descuentos)) + " de la venta bruta" : ""}</div></div>
       <div class="card kpi"><div class="l">Cancelaciones</div><div class="v" style="font-size:20px">${k.canceladas}</div><div class="d">${money0(k.monto_cancelado)}</div></div>
     </div>
+    ${gf.configurado ? `<div class="kpis" style="margin-top:12px">
+      <div class="card kpi"><div class="l">Gastos fijos del periodo</div><div class="v" style="font-size:20px">${money0(k.gastos_fijos)}</div><div class="d">${k.ventas ? pct(k.gastos_pct) + " de las ventas" : "prorrateados por día"}</div></div>
+      <div class="card kpi"><div class="l">Utilidad operativa</div><div class="v ${k.utilidad < 0 ? "bad-t" : ""}" style="font-size:20px">${money0(k.utilidad)}</div><div class="d">${pct(k.utilidad_pct)} · ${delta(k.utilidad, p.utilidad)}</div></div>
+      <div class="card kpi"><div class="l">Punto de equilibrio</div><div class="v" style="font-size:20px">${k.punto_equilibrio ? money0(k.punto_equilibrio) : "—"}</div><div class="d">${k.punto_equilibrio ? `${pct(k.ventas / k.punto_equilibrio, 0)} alcanzado · ${money0(k.punto_equilibrio / d.rango.dias)} por día` : "sin ventas con margen en el periodo"}</div></div>
+      <div class="card kpi"><div class="l">Costo laboral (nómina ÷ ventas)</div><div class="v" style="font-size:20px">${pct(k.nomina_pct)}</div><div class="d">${delta(k.nomina_pct, p.nomina_pct, { inverso: true, esPct: true })}</div></div>
+      <div class="card kpi"><div class="l">Prime cost (insumos + nómina)</div><div class="v" style="font-size:20px">${pct(k.prime_cost_pct)}</div><div class="d">${delta(k.prime_cost_pct, p.prime_cost_pct, { inverso: true, esPct: true })}</div></div>
+      <div class="card kpi"><div class="l">Gastos fijos al mes</div><div class="v" style="font-size:20px">${money0(gf.mensual)}</div><div class="d"><a href="#/gastos">Administrar gastos fijos →</a></div></div>
+    </div>` : `<div class="alert info" style="margin-top:12px">Captura tus gastos fijos mensuales (nómina, renta, luz, agua, gas…) para ver la utilidad operativa, el punto de equilibrio y el costo laboral. <a href="#/gastos"><b>Ir a Gastos fijos →</b></a></div>`}
     <div class="dash-grid">
-      <div class="card c8"><div class="card-h"><h3>Ventas y margen bruto ${d.rango.agrupar === "semana" ? "por semana" : "por día"}</h3>
-        <div class="legend"><span><i style="background:${C.s1}"></i>Ventas</span><span><i style="background:${C.s2}"></i>Margen bruto</span></div></div>
+      <div class="card c8"><div class="card-h"><h3>Ventas, margen${gf.configurado ? " y utilidad" : ""} ${d.rango.agrupar === "semana" ? "por semana" : "por día"}</h3>
+        <div class="legend"><span><i style="background:${C.s1}"></i>Ventas</span><span><i style="background:${C.s2}"></i>Margen bruto</span>${gf.configurado ? `<span><i style="background:${C.s3}"></i>Utilidad operativa</span>` : ""}</div></div>
         <div class="card-b"><div class="chart-box"><canvas id="ch-serie"></canvas></div></div></div>
       <div class="card c4"><div class="card-h"><h3>Métodos de pago</h3></div><div class="card-b" id="t-met"></div></div>
+      <div class="card c6"><div class="card-h"><h3>Estado de resultados</h3><span class="hint">del periodo, con gastos fijos prorrateados</span></div><div class="card-b" id="t-pyl"></div></div>
+      <div class="card c6"><div class="card-h"><h3>Gastos fijos por categoría</h3><a href="#/gastos" class="hint">Administrar →</a></div><div class="card-b" id="t-gf"></div></div>
       <div class="card c6"><div class="card-h"><h3>Ventas por hora del día</h3><span class="hint">total del periodo</span></div>
         <div class="card-b"><div class="chart-box"><canvas id="ch-hora"></canvas></div></div></div>
       <div class="card c6"><div class="card-h"><h3>Venta promedio por día de la semana</h3></div>
@@ -135,13 +145,14 @@ async function cargar() {
     data: { labels, datasets: [
       { label: "Ventas", data: d.serie.map((s) => s.ventas), borderColor: C.s1, backgroundColor: C.s1 + "1a", fill: true, borderWidth: 2, pointRadius: 0, pointHoverRadius: 5, pointHoverBorderColor: "#fff", pointHoverBorderWidth: 2, tension: 0.25 },
       { label: "Margen bruto", data: d.serie.map((s) => s.margen), borderColor: C.s2, backgroundColor: C.s2, borderWidth: 2, pointRadius: 0, pointHoverRadius: 5, pointHoverBorderColor: "#fff", pointHoverBorderWidth: 2, tension: 0.25 },
+      ...(gf.configurado ? [{ label: "Utilidad operativa", data: d.serie.map((s) => s.utilidad), borderColor: C.s3, backgroundColor: C.s3, borderWidth: 2, pointRadius: 0, pointHoverRadius: 5, pointHoverBorderColor: "#fff", pointHoverBorderWidth: 2, tension: 0.25 }] : []),
     ] },
     options: {
       interaction: { mode: "index", intersect: false },
       scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 10, maxRotation: 0 } },
         y: { beginAtZero: true, border: { display: false }, ticks: { callback: (v) => compact(v) } } },
       plugins: { tooltip: { callbacks: { label: (c) => ` ${c.dataset.label}: ${money(c.parsed.y)}`,
-        afterBody: (items) => { const s = d.serie[items[0].dataIndex]; return [`Tickets: ${s.tickets}`, s.ventas ? `Margen: ${pct(s.margen / s.ventas)}` : ""]; } } } },
+        afterBody: (items) => { const s = d.serie[items[0].dataIndex]; return [`Tickets: ${s.tickets}`, s.ventas ? `Margen: ${pct(s.margen / s.ventas)}` : "", gf.configurado ? `Gastos fijos: ${money(s.gastos)}` : ""].filter(Boolean); } } } },
     },
   }));
 
@@ -151,6 +162,31 @@ async function cargar() {
       <div class="row"><b class="grow">${esc(m.metodo)}</b><span class="num">${money0(m.ventas)}</span><span class="num muted" style="width:52px">${pct(m.ventas / totMet, 0)}</span></div>
       <div class="bar-mini" style="margin-top:6px;height:8px"><i style="width:${(m.ventas / totMet) * 100}%"></i></div>
       <div class="hint" style="margin-top:3px">${m.tickets} tickets · promedio ${money(m.ventas / (m.tickets || 1))}</div></div>`).join("") : `<div class="empty">Sin ventas</div>`;
+
+  // --- Estado de resultados
+  const pv = (x) => (k.ventas ? pct(x / k.ventas) : "—");
+  const filas = [
+    { c: "Ventas netas", m: k.ventas, p: pv(k.ventas), fuerte: true },
+    { c: "(−) Costo de ventas", m: -k.costo, p: pv(k.costo) },
+    { c: "Margen bruto", m: k.margen, p: pv(k.margen), fuerte: true },
+    { c: "(−) Gastos fijos", m: -k.gastos_fijos, p: pv(k.gastos_fijos) },
+    ...gf.por_categoria.map((g) => ({ c: g.categoria, m: -g.monto, p: pv(g.monto), sub: true })),
+    { c: "Utilidad operativa", m: k.utilidad, p: pv(k.utilidad), fuerte: true, util: true },
+  ];
+  $("#t-pyl").appendChild(table([
+    { t: "Concepto", k: "c", f: (v, r) => r.sub ? `<span class="muted" style="padding-left:18px">${esc(v)}</span>` : r.fuerte ? `<b>${esc(v)}</b>` : esc(v) },
+    { t: "Monto", k: "m", cls: "num", f: (v, r) => { const t = (v < 0 ? "−" : "") + money(Math.abs(v)); return r.util ? `<b class="${v < 0 ? "bad-t" : "ok-t"}">${t}</b>` : r.fuerte ? `<b>${t}</b>` : r.sub ? `<span class="muted">${t}</span>` : t; } },
+    { t: "% ventas", k: "p", cls: "num" },
+  ], filas, { empty: "Sin datos" }));
+  if (!gf.configurado) $("#t-pyl").insertAdjacentHTML("beforeend", `<div class="hint" style="margin-top:8px">Aún no hay gastos fijos capturados: la utilidad operativa es igual al margen bruto.</div>`);
+
+  // --- Gastos fijos por categoría
+  const maxGf = Math.max(...gf.por_categoria.map((g) => g.monto), 1);
+  $("#t-gf").innerHTML = gf.por_categoria.length ? gf.por_categoria.map((g) => `<div style="margin-bottom:12px">
+      <div class="row"><b class="grow">${esc(g.categoria)}</b><span class="num">${money0(g.monto)}</span><span class="num muted" style="width:52px">${pct(g.monto / (gf.total || 1), 0)}</span></div>
+      <div class="bar-mini" style="margin-top:5px;height:8px"><i style="width:${(g.monto / maxGf) * 100}%"></i></div></div>`).join("") +
+    `<div class="hint">Mayores: ${esc(gf.detalle.slice(0, 3).map((x) => `${x.concepto} (${money0(x.monto)})`).join(", "))}</div>`
+    : `<div class="empty">Sin gastos fijos en el periodo. <a href="#/gastos">Capturarlos</a></div>`;
 
   // --- Por hora
   const horas = [];

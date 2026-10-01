@@ -27,10 +27,13 @@ En Windows: `scripts\build.bat` (lint + pruebas + exe + instalador) y `scripts\d
 - `app/server.py` app FastAPI, manejadores de error, monta `/static`
 - `app/db.py` **esquema completo, vistas analíticas**, `init_db`, `audit`, respaldos
 - `app/services.py` **reglas de negocio**: `registrar_venta` (backflush), `cancelar_venta`,
-  `mover_inventario` (costo promedio ponderado), `registrar_entrada`, `ajustar_inventario`, `resumen_turno`
+  `mover_inventario` (costo promedio ponderado), `registrar_entrada`, `ajustar_inventario`, `resumen_turno`,
+  cuentas por mesa (`abrir_cuenta`, `agregar_item`, `cobrar_cuenta`, `cancelar_cuenta`), `siguiente_folio`,
+  `prorratear_gastos` (gastos fijos por día para el dashboard)
 - `app/routers/*.py` endpoints delgados; validan con Pydantic y llaman a `services`
 - `app/security.py` PBKDF2 + sesiones en memoria; dependencias `current_user` / `require_admin`
 - `app/static/js/app.js` router por hash y layout; `js/views/*.js` una pantalla por archivo; `js/ui.js` helpers
+- `app/routers/cuentas.py` mesas abiertas · `app/routers/gastos.py` gastos fijos (solo Admin)
 - `tests/conftest.py` fixtures: `client`, `admin`, `cajero`, `catalogo`, `turno`, `vender`, `stock`
 
 ## Reglas de negocio que no se deben romper
@@ -43,6 +46,9 @@ En Windows: `scripts\build.bat` (lint + pruebas + exe + instalador) y `scripts\d
 6. Operaciones con varias escrituras van en una transacción (`with conn:` o `BEGIN IMMEDIATE`).
 7. Acciones relevantes se registran con `db.audit(...)`.
 8. Endpoints de administración usan `Depends(require_admin)`; agregar la prueba en `tests/test_permisos.py`.
+9. Todo folio sale de `services.siguiente_folio` (consecutivo único, nunca se reutiliza). Una cuenta abierta no mueve
+   inventario; el backflush ocurre solo en `cobrar_cuenta` → `registrar_venta`, que conserva el folio de la cuenta.
+10. Los gastos fijos no se guardan por periodo: se prorratean por día con `prorratear_gastos` según su vigencia.
 
 ## Convenciones
 - Commits: Conventional Commits en español (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `build:`, `ci:`).

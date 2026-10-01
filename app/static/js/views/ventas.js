@@ -12,7 +12,7 @@ export async function render(view, ctx) {
       <label class="f">Hasta<input class="input" type="date" id="f-hasta" value="${filtros.hasta}"></label>` : ""}
       <label class="f">Estado<select class="input" id="f-estado">
         <option value="">Todas</option><option value="PAGADA">Pagadas</option><option value="CANCELADA">Canceladas</option></select></label>
-      <label class="f grow" style="max-width:280px">Buscar<input class="input" id="f-buscar" placeholder="Folio o cliente" value="${esc(filtros.buscar)}"></label>
+      <label class="f grow" style="max-width:280px">Buscar<input class="input" id="f-buscar" placeholder="Folio, mesa o cliente" value="${esc(filtros.buscar)}"></label>
     </div>
     <div id="v-res" class="row wrap" style="margin-bottom:10px"></div>
     <div id="v-tabla"></div></div>`;
@@ -35,7 +35,7 @@ async function cargar(ctx) {
      ${rows.length - pag.length ? `<span class="badge bad">${rows.length - pag.length} canceladas</span>` : ""}`;
   const el = $("#v-tabla"); el.innerHTML = "";
   el.appendChild(table([
-    { t: "Folio", k: "folio" }, { t: "Fecha", k: "fecha_hora", f: (v) => esc(fmtDate(v)) },
+    { t: "Folio", k: "folio" }, { t: "Mesa", k: "mesa" }, { t: "Fecha", k: "fecha_hora", f: (v) => esc(fmtDate(v)) },
     { t: "Atendió", k: "usuario" }, { t: "Pago", k: "metodo_pago" }, { t: "Cliente", k: "cliente" },
     { t: "Artículos", k: "articulos", cls: "num" }, { t: "Descuento", k: "descuento", cls: "num", f: (v) => v ? money(v) : "" },
     { t: "Total", k: "total", cls: "num", f: (v) => `<b>${money(v)}</b>` },
@@ -49,7 +49,7 @@ async function detalle(id, ctx) {
   try { v = await get(`/ventas/${id}`); } catch (e) { return toastErr(e); }
   const m = modal({
     title: `Ticket ${v.folio}`, size: "w-lg",
-    body: `<div class="row wrap" style="margin-bottom:12px">${badgeEstado(v.estado)}<span class="ink2">${esc(fmtDate(v.fecha_hora))} · ${esc(v.usuario)} · ${esc(v.metodo_pago)} · Turno #${v.turno_id ?? "-"}</span></div>
+    body: `<div class="row wrap" style="margin-bottom:12px">${badgeEstado(v.estado)}<span class="ink2">${v.mesa ? "Mesa " + esc(v.mesa) + " · " : ""}${esc(fmtDate(v.fecha_hora))} · ${esc(v.usuario)} · ${esc(v.metodo_pago)} · Turno #${v.turno_id ?? "-"}</span></div>
       ${v.estado === "CANCELADA" ? `<div class="alert bad" style="margin-bottom:12px">Cancelada el ${esc(fmtDate(v.cancelada_en))} por ${esc(v.cancelada_por_nombre || "")}: ${esc(v.motivo_cancelacion || "")}</div>` : ""}
       <div id="d-lin"></div>
       <div class="grid2" style="margin-top:14px"><div class="ink2">${v.cliente ? "Cliente: " + esc(v.cliente) : ""}</div>

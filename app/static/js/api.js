@@ -53,3 +53,4 @@ export async function api(path, { method = "GET", body, raw = false, query } = {
 export const get = (p, query) => api(p, { query });
 export const post = (p, body, query) => api(p, { method: "POST", body: body ?? {}, query });
 export const put = (p, body) => api(p, { method: "PUT", body });
+export const del = (p) => api(p, { method: "DELETE" });

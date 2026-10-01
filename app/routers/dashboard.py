@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ..db import get_db
 from ..security import require_admin
+from ..services import CATEGORIA_NOMINA, prorratear_gastos, resumen_gastos_fijos
 
 router = APIRouter(prefix="/api", tags=["dashboard"])
 
@@ -42,6 +43,33 @@ def _kpis(conn, desde: str, hasta: str) -> dict:
     }
 
 
+def _con_resultado(k: dict, gf: dict) -> dict:
+    """Agrega a los KPIs lo que dependen de los gastos fijos (utilidad, punto de equilibrio, prime cost)."""
+    ventas, gastos = k["ventas"], gf["total"]
+    nomina = next((c["monto"] for c in gf["por_categoria"] if c["categoria"] == CATEGORIA_NOMINA), 0.0)
+    utilidad = round(k["margen"] - gastos, 2)
+    return {
+        **k,
+        "gastos_fijos": gastos,
+        "nomina": nomina,
+        "utilidad": utilidad,
+        "utilidad_pct": round(utilidad / ventas, 4) if ventas else 0,
+        "gastos_pct": round(gastos / ventas, 4) if ventas else 0,
+        "nomina_pct": round(nomina / ventas, 4) if ventas else 0,
+        "prime_cost_pct": round((k["costo"] + nomina) / ventas, 4) if ventas else 0,
+        # ventas que se necesitan en el periodo para cubrir los gastos fijos con el margen bruto actual
+        "punto_equilibrio": round(gastos / k["margen_pct"], 2) if k["margen_pct"] > 0 and gastos else None,
+    }
+
+
+def _gasto_del_periodo(diario: dict, desde: str, hasta: str) -> float:
+    d, fin, total = date.fromisoformat(desde), date.fromisoformat(hasta), 0.0
+    while d <= fin:
+        total += diario.get(d.isoformat(), 0.0)
+        d += timedelta(days=1)
+    return round(total, 2)
+
+
 @router.get("/dashboard")
 def dashboard(desde: str, hasta: str, user=Depends(require_admin), conn=Depends(get_db)):
     try:
@@ -57,8 +85,10 @@ def dashboard(desde: str, hasta: str, user=Depends(require_admin), conn=Depends(
     rango = (desde, hasta)
     hasta_ts = hasta + " 23:59:59"
 
-    actual = _kpis(conn, desde, hasta)
-    anterior = _kpis(conn, p0.isoformat(), p1.isoformat())
+    gf = prorratear_gastos(conn, d0, d1)
+    gf_ant = prorratear_gastos(conn, p0, p1)
+    actual = _con_resultado(_kpis(conn, desde, hasta), gf)
+    anterior = _con_resultado(_kpis(conn, p0.isoformat(), p1.isoformat()), gf_ant)
 
     # agrupar por semana si el rango es largo
     agrupar = "semana" if dias > 120 else "dia"
@@ -78,7 +108,7 @@ def dashboard(desde: str, hasta: str, user=Depends(require_admin), conn=Depends(
         serie = [
             dict(r)
             for r in conn.execute(
-                """SELECT MIN(d.fecha) AS periodo, '' AS nombre_dia,
+                """SELECT MIN(d.fecha) AS periodo, MAX(d.fecha) AS periodo_fin, '' AS nombre_dia,
                       COALESCE(SUM(v.total),0) AS ventas, COALESCE(SUM(v.costo_total),0) AS costo,
                       COUNT(v.venta_id) AS tickets
                FROM dim_fecha d LEFT JOIN ventas v ON v.fecha_id=d.fecha_id AND v.estado='PAGADA'
@@ -88,6 +118,8 @@ def dashboard(desde: str, hasta: str, user=Depends(require_admin), conn=Depends(
         ]
     for s in serie:
         s["margen"] = round(s["ventas"] - s["costo"], 2)
+        s["gastos"] = _gasto_del_periodo(gf["diario"], s["periodo"], s.pop("periodo_fin", s["periodo"]))
+        s["utilidad"] = round(s["margen"] - s["gastos"], 2)
 
     por_hora = [
         dict(r)
@@ -257,6 +289,13 @@ def dashboard(desde: str, hasta: str, user=Depends(require_admin), conn=Depends(
         },
         "kpis": actual,
         "kpis_anterior": anterior,
+        "gastos_fijos": {
+            "configurado": gf["configurado"],
+            "total": gf["total"],
+            "por_categoria": gf["por_categoria"],
+            "detalle": gf["detalle"],
+            "mensual": resumen_gastos_fijos(conn)["total_mensual"],
+        },
         "serie": serie,
         "por_hora": por_hora,
         "por_dia_semana": por_dia_semana,

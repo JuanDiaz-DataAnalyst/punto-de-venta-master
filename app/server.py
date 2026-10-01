@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import config
-from .routers import admin, auth, catalogo, dashboard, inventario, ventas
+from .routers import admin, auth, catalogo, cuentas, dashboard, gastos, inventario, ventas
 from .security import current_user
 from .services import ErrorNegocio
 
@@ -38,7 +38,7 @@ async def _err_general(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"detail": f"Error interno: {exc}"})
 
 
-for r in (auth, catalogo, inventario, ventas, admin, dashboard):
+for r in (auth, catalogo, inventario, ventas, cuentas, gastos, admin, dashboard):
     app.include_router(r.router)
 
 

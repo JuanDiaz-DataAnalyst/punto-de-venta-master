@@ -134,6 +134,23 @@ PRODUCTOS = [
     ("P03", "Pay de queso (rebanada)", "Postres", 55, 1, {"QUE": 0.02, "AZU": 0.02, "LEH": 0.05}),
 ]
 
+# concepto, categoría, monto mensual (food truck con 3 personas en nómina)
+GASTOS_FIJOS = [
+    ("Salarios de cocina", "Nómina", 18000),
+    ("Salarios de meseros / servicio", "Nómina", 14000),
+    ("Salario del encargado o administrador", "Nómina", 9000),
+    ("Cargas sociales (IMSS, INFONAVIT, SAR)", "Nómina", 6500),
+    ("Renta del local", "Renta", 9000),
+    ("Electricidad", "Servicios", 1800),
+    ("Agua", "Servicios", 900),
+    ("Gas", "Servicios", 4200),
+    ("Internet y teléfono", "Servicios", 700),
+    ("Mantenimiento de equipo y local", "Mantenimiento", 1500),
+    ("Publicidad y redes sociales", "Marketing", 2500),
+    ("Contador", "Administrativos", 1800),
+    ("Licencias y permisos", "Impuestos y permisos", 900),
+]
+
 HORAS_PESO = {13: 6, 14: 12, 15: 11, 16: 6, 17: 5, 18: 7, 19: 10, 20: 14, 21: 13, 22: 8}
 DIA_FACTOR = {0: 0.75, 1: 0.8, 2: 0.9, 3: 0.95, 4: 1.3, 5: 1.55, 6: 1.35}  # lunes..domingo
 
@@ -340,6 +357,11 @@ def cargar_datos_ejemplo(conn, admin_id: int, dias: int = 90, semilla: int = 7) 
                             rnd.choice(["Merma", "Caducidad", "Daño / derrame"]),
                             _ts(d, 23, 30),
                         )
+        for concepto, categoria, monto in GASTOS_FIJOS:
+            conn.execute(
+                "INSERT INTO gastos_fijos(concepto, categoria, monto_mensual, vigente_desde) VALUES (?,?,?,?)",
+                (concepto, categoria, monto, inicio.isoformat()),
+            )
         # dejar algunos insumos en nivel bajo para ver alertas
         for cod in ("CIL", "TOC", "CAJ"):
             iid = ids["ins"][cod]

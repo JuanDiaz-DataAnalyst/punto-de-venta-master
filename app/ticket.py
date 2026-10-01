@@ -55,7 +55,7 @@ def render_ticket(venta: dict, cfg: dict, reimpresion: bool = False) -> str:
  <div class="c small">{cabecera}{rfc}</div>
  <hr>
  <div class="small">Folio: <b>{escape(venta["folio"])}</b><br>Fecha: {venta["fecha_hora"]}<br>
- Atendió: {escape(venta["usuario"])}{("<br>Cliente: " + escape(venta["cliente"])) if venta.get("cliente") else ""}</div>
+ {("Mesa: <b>" + escape(venta["mesa"]) + "</b><br>") if venta.get("mesa") else ""}Atendió: {escape(venta["usuario"])}{("<br>Cliente: " + escape(venta["cliente"])) if venta.get("cliente") else ""}</div>
  {reimp}{cancel}
  <hr>
  <table>{filas}</table>
