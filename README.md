@@ -38,7 +38,7 @@ y está construido con software gratuito.
 
 Descarga el instalador o la versión portable desde **[Releases](https://github.com/JuanDiaz-DataAnalyst/punto-de-venta-master/releases)**.
 Requiere Windows 10/11 con *Microsoft Edge WebView2 Runtime* (incluido en Windows actualizado).
-Consulta el [manual de usuario](docs/manual-de-usuario.md).
+Consulta el [manual de usuario](docs/manual-de-usuario.md) o abre el **[manual interactivo paso a paso](docs/manual-interactivo.html)** (un solo archivo; funciona en computadora, teléfono y tablet).
 
 ## Desarrollo
 

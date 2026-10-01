@@ -4,6 +4,8 @@ Todos los cambios relevantes se documentan aquí. Formato basado en
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
+### Agregado
+- Manual interactivo paso a paso (`docs/manual-interactivo.html`): instalación, cajero, administrador y respaldos.
 
 ## [1.0.0] - 2026-09-30
 ### Agregado
