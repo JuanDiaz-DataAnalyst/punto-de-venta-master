@@ -56,7 +56,9 @@ jobs:
       - name: Generar instalador
         shell: pwsh
         run: |
-          $ver = if ($env:GITHUB_REF_TYPE -eq "tag") { $env:GITHUB_REF_NAME.TrimStart("v") } else { "0.0.0-dev" }
+          $actual = (Select-String -Path app\__init__.py -Pattern '__version__ = "([^"]+)"').Matches[0].Groups[1].Value
+          $ver = if ($env:GITHUB_REF_TYPE -eq "tag") { $env:GITHUB_REF_NAME.TrimStart("v") } else { "$actual-dev" }
+          if ($env:GITHUB_REF_TYPE -eq "tag" -and $ver -ne $actual) { throw "La etiqueta $env:GITHUB_REF_NAME no coincide con la versión del código ($actual)" }
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$ver" packaging\installer.iss
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup falló" }
           Compress-Archive -Path dist\PuntoDeVentaMASTER\* -DestinationPath "PuntoDeVentaMASTER-$ver-portable.zip"

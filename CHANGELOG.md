@@ -4,6 +4,8 @@ Todos los cambios relevantes se documentan aquí. Formato basado en
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y [versionado semántico](https://semver.org/lang/es/).
 
 ## [Sin publicar]
+
+## [1.1.0] - 2026-10-01
 ### Agregado
 - **Cuentas abiertas por mesa**: varios tickets independientes a la vez, en pestañas cuyo título es el número
   de mesa. Se pueden seguir agregando consumos mientras los comensales están en la mesa; el inventario se
@@ -36,6 +38,8 @@ Todos los cambios relevantes se documentan aquí. Formato basado en
 - Cerrar sesión desde cualquier pantalla ya no provoca un error de JavaScript en la consola.
 
 ### Cambiado
+- Las compilaciones manuales del instalador se nombran con la versión real (`X.Y.Z-dev`) en lugar de `0.0.0-dev`;
+  `scripts\build.bat` también compila el instalador con la versión de `app/__init__.py`.
 - Cerrar el turno de caja se bloquea mientras haya cuentas abiertas.
 - Esquema v2 (migración automática): `ventas.mesa`, tablas `cuentas`, `cuenta_items` y `gastos_fijos`,
   y consecutivo de folios en `config.folio_consecutivo` (arranca en el último folio existente).
@@ -54,5 +58,6 @@ Todos los cambios relevantes se documentan aquí. Formato basado en
 - Datos de ejemplo (food truck con 90 días de operación).
 - Empaquetado Windows (PyInstaller + Inno Setup) y CI en GitHub Actions.
 
-[Sin publicar]: https://github.com/JuanDiaz-DataAnalyst/punto-de-venta-master/compare/v1.0.0...HEAD
+[Sin publicar]: https://github.com/JuanDiaz-DataAnalyst/punto-de-venta-master/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/JuanDiaz-DataAnalyst/punto-de-venta-master/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/JuanDiaz-DataAnalyst/punto-de-venta-master/releases/tag/v1.0.0

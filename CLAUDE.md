@@ -59,6 +59,9 @@ En Windows: `scripts\build.bat` (lint + pruebas + exe + instalador) y `scripts\d
 - Cambios de esquema: agregar migración idempotente en `db.init_db` y subir `SCHEMA_VERSION`; nunca borrar
   columnas con datos. Documentar en `docs/modelo-de-datos.md` y `CHANGELOG.md`.
 - Cada bug corregido lleva una prueba que lo reproduce.
+- Versionado: cada PR sube la versión (feat → minor; fix/docs/test/build/ci → patch; incompatible → major) en
+  `app/__init__.py`, `pyproject.toml`, `packaging/installer.iss` y `CHANGELOG.md`; `tests/test_version.py` lo valida.
+  La etiqueta `vX.Y.Z` se crea después del merge a `main` (ver CONTRIBUTING.md).
 - Frontend: escapar todo texto de usuario con `esc()` antes de meterlo a `innerHTML`.
 - Colores de gráficas: usar la paleta validada definida en `js/views/dashboard.js` (no inventar colores).
 

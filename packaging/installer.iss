@@ -1,7 +1,7 @@
 ; Instalador de Punto de Venta MASTER - Inno Setup 6 (gratuito): https://jrsoftware.org/isinfo.php
 #define AppName "Punto de Venta MASTER"
 #ifndef AppVersion
-  #define AppVersion "1.0.0"
+  #define AppVersion "1.1.0"
 #endif
 #define AppExe "PuntoDeVentaMASTER.exe"
 

@@ -24,8 +24,19 @@ pre-commit install            &:: opcional: lint automático antes de cada commi
 7. Merge con *squash* y borra la rama.
 
 ## Versiones y entregas
-1. Actualiza `__version__` en `app/__init__.py`, `version` en `pyproject.toml` y `CHANGELOG.md`.
-2. `git tag v1.1.0 && git push origin v1.1.0`
+Cada Pull Request que se fusiona a `main` sube la versión ([versionado semántico](https://semver.org/lang/es/)) para
+conservar un historial de cambios:
+
+| Tipo de cambio | Sube | Ejemplo |
+|---|---|---|
+| Funcionalidad nueva (`feat`) | **minor** | 1.1.0 → 1.2.0 |
+| Corrección, documentación, pruebas, build/CI (`fix`, `docs`, `test`, `build`, `ci`) | **patch** | 1.2.0 → 1.2.1 |
+| Cambio que rompe compatibilidad (datos, API) | **major** | 1.2.1 → 2.0.0 |
+
+1. En el PR: actualiza `__version__` en `app/__init__.py`, `version` en `pyproject.toml`, el `AppVersion` por defecto de
+   `packaging/installer.iss` y escribe la entrada en `CHANGELOG.md` (`## [X.Y.Z] - AAAA-MM-DD`, más el enlace al final).
+   La prueba `tests/test_version.py` falla si algo de esto no coincide. Los commits intermedios de un mismo PR no suben versión.
+2. Después del merge, desde `main`: `git tag vX.Y.Z && git push origin vX.Y.Z`
 3. El workflow **Build Windows** compila el `.exe`, corre una prueba de humo, genera el instalador y lo
    publica en *Releases*.
 
