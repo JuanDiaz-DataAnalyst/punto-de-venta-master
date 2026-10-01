@@ -36,6 +36,7 @@ Source: "dist\PuntoDeVentaMASTER\*"; DestDir: "{app}"; Flags: ignoreversion recu
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"
+Name: "{group}\{#AppName} (modo navegador)"; Filename: "{app}\{#AppExe}"; Parameters: "--browser"; Comment: "Usar si la ventana propia no abre (sin WebView2)"
 Name: "{group}\Desinstalar {#AppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 

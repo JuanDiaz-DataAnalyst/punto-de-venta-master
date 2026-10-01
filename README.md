@@ -29,6 +29,7 @@ y está construido con software gratuito.
 - **Dashboard**: KPIs vs. periodo anterior, tendencia, ventas por hora y día, top productos, categorías,
   métodos de pago, **ingeniería de menú**, rentabilidad por producto, cobertura de inventario, merma y
   desempeño por usuario.
+- **Ayuda integrada** (tecla F1) con la guía de operación para el usuario final.
 - **Reportes**: exportación a Excel/CSV, respaldos automáticos y restauración.
 
 | Dashboard | Receta con costo y margen |
@@ -87,6 +88,13 @@ scripts/                               build.bat, dev.bat
 docs/                                  arquitectura, modelo de datos, manual, capturas
 .github/                               CI, build de Windows, plantillas, Dependabot
 ```
+
+## Instalar en computadoras de clientes
+1. Consigue el instalador de Windows: se publica solo en [Releases](../../releases) al subir una etiqueta `vX.Y.Z`
+   (o ejecuta el workflow **Build Windows** en la pestaña Actions).
+2. Genera el kit con `python scripts/empaquetar_kit.py` (opcionalmente `--instalador ruta\Instalar_PuntoDeVentaMASTER_X.Y.Z.exe`).
+   Crea `kit-instalacion/` y un `.zip` con la guía de instalación, el manual, el checklist de entrega, herramientas y el código fuente.
+3. Lleva el kit a la computadora del cliente y sigue `1-Guia-de-instalacion.html`.
 
 ## Hoja de ruta
 - [ ] Modificadores con precio (extra queso +$10) que también descuenten inventario

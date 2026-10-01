@@ -19,6 +19,7 @@ python -m app.main --server                       # solo API; docs en /api/docs
 python -m app.main --browser --demo               # app en navegador con datos de ejemplo (BD vacía)
 POS_DATA_DIR=/tmp/pos python -m app.main --server # usar otra carpeta de datos
 pyinstaller packaging/PuntoDeVenta.spec --noconfirm   # ejecutable (solo en Windows)
+python scripts/empaquetar_kit.py                  # kit de instalación para clientes (kit-instalacion/ + .zip)
 ```
 En Windows: `scripts\build.bat` (lint + pruebas + exe + instalador) y `scripts\dev.bat`.
 
@@ -33,6 +34,8 @@ En Windows: `scripts\build.bat` (lint + pruebas + exe + instalador) y `scripts\d
 - `app/routers/*.py` endpoints delgados; validan con Pydantic y llaman a `services`
 - `app/security.py` PBKDF2 + sesiones en memoria; dependencias `current_user` / `require_admin`
 - `app/static/js/app.js` router por hash y layout; `js/views/*.js` una pantalla por archivo; `js/ui.js` helpers
+- `app/static/js/views/ayuda.js` ayuda para el usuario final (F1); al cambiar una función, actualizarla junto con `docs/manual-de-usuario.md`
+- `distribucion/` fuentes del kit de instalación (guías .md, `.bat`); `scripts/empaquetar_kit.py` lo arma y lo convierte a HTML
 - `app/routers/cuentas.py` mesas abiertas · `app/routers/gastos.py` gastos fijos (solo Admin)
 - `tests/conftest.py` fixtures: `client`, `admin`, `cajero`, `catalogo`, `turno`, `vender`, `stock`
 

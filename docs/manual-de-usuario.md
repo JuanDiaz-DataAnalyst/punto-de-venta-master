@@ -1,5 +1,7 @@
 # Manual de usuario
 
+Este manual también está dentro del sistema: menú lateral **Ayuda** o tecla **F1**.
+
 ## 1. Primera vez
 1. Abre **Punto de Venta MASTER**.
 2. Captura el nombre del negocio y crea el usuario **administrador**.

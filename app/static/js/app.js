@@ -9,6 +9,7 @@ const ROUTES = [
   { path: "caja", label: "Caja / Turno", icon: "caja", mod: "./views/caja.js" },
   { path: "ventas", label: "Ventas", icon: "ventas", mod: "./views/ventas.js" },
   { path: "inventario", label: "Inventario", icon: "inv", mod: "./views/inventario.js" },
+  { path: "ayuda", label: "Ayuda", icon: "help", mod: "./views/ayuda.js" },
   { sec: "Administración", admin: true },
   { path: "dashboard", label: "Dashboard", icon: "dash", mod: "./views/dashboard.js", admin: true },
   { path: "catalogo", label: "Menú y recetas", icon: "cat", mod: "./views/catalogo.js", admin: true },
@@ -128,6 +129,7 @@ async function startApp() {
   const off = $("[data-off]");
   if (off) off.onclick = apagar;
   window.onhashchange = route;
+  document.onkeydown = (e) => { if (e.key === "F1" && state.user) { e.preventDefault(); location.hash = "#/ayuda"; } };
   if (!location.hash || location.hash === "#/") location.hash = "#/pos";
   route();
 }
@@ -135,6 +137,7 @@ async function startApp() {
 let cleanup = null;
 let routeSeq = 0;
 async function route() {
+  if (!state.user || !$("#view")) return; // p. ej. el cambio de hash que provoca cerrar sesión
   const path = (location.hash.replace(/^#\//, "") || "pos").split("?")[0];
   let r = ROUTES.find((x) => x.path === path && (!x.admin || isAdmin()));
   if (!r) { location.hash = "#/pos"; return; }

@@ -22,6 +22,16 @@ Todos los cambios relevantes se documentan aquí. Formato basado en
   mesa abierta, conservando las notas. El descuento se queda en la cuenta original.
 - El tipo de usuario (Admin / User) se elige en un menú desplegable con su descripción.
 
+- **Ayuda dentro del sistema** (menú lateral o tecla **F1**): guía de operación con búsqueda y secciones según el tipo de
+  usuario, más datos de versión y ubicación de datos, respaldos y registros.
+- **Kit de instalación** (`python scripts/empaquetar_kit.py`): carpeta y .zip con guía de instalación, manual del usuario y
+  checklist de entrega en HTML, herramientas `.bat` (verificar equipo, respaldar datos), código fuente y, si existe, el
+  instalador de Windows. Nuevo `scripts/instalar-desde-codigo.bat` como alternativa al instalador.
+- El instalador agrega el acceso «Punto de Venta MASTER (modo navegador)» para equipos sin WebView2.
+
+### Corregido
+- Cerrar sesión desde cualquier pantalla ya no provoca un error de JavaScript en la consola.
+
 ### Cambiado
 - Cerrar el turno de caja se bloquea mientras haya cuentas abiertas.
 - Esquema v2 (migración automática): `ventas.mesa`, tablas `cuentas`, `cuenta_items` y `gastos_fijos`,
