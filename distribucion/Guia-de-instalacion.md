@@ -116,7 +116,7 @@ de datos en red (PostgreSQL), que está en la hoja de ruta. No intentes comparti
 | Síntoma | Qué hacer |
 |---|---|
 | «Windows protegió su PC» al abrir el instalador | Más información → Ejecutar de todas formas (ver apartado 4) |
-| Error «does not provide an export named…» al abrir un módulo (solo al actualizar desde una instalación hecha antes de este arreglo) | La ventana guardó archivos viejos en su caché: pulsa **Ctrl+F5**; si persiste, cierra el sistema, borra la carpeta `%LOCALAPPDATA%\pywebview` y ábrelo de nuevo. Las versiones nuevas ya no lo presentan |
+| Error «does not provide an export named…» al abrir un módulo (solo al actualizar desde una instalación hecha antes de este arreglo) | La ventana guardó archivos viejos en su caché: pulsa **Ctrl+F5**; si persiste, cierra el sistema, borra la carpeta `%APPDATA%\pywebview` y ábrelo de nuevo. Las versiones nuevas ya no lo presentan |
 | No abre la ventana del sistema | Instala *Microsoft Edge WebView2 Runtime* o usa el acceso **modo navegador** |
 | El navegador muestra «No se puede acceder» | Espera unos segundos y recarga; si persiste, cierra el sistema desde el Administrador de tareas y ábrelo de nuevo |
 | «No hay un turno de caja abierto» | Abre la caja en Vender o en Caja / Turno |
