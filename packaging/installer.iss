@@ -1,7 +1,7 @@
 ; Instalador de Punto de Venta MASTER - Inno Setup 6 (gratuito): https://jrsoftware.org/isinfo.php
 #define AppName "Punto de Venta MASTER"
 #ifndef AppVersion
-  #define AppVersion "1.0.0"
+  #define AppVersion "1.1.0"
 #endif
 #define AppExe "PuntoDeVentaMASTER.exe"
 
@@ -36,6 +36,7 @@ Source: "dist\PuntoDeVentaMASTER\*"; DestDir: "{app}"; Flags: ignoreversion recu
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"
+Name: "{group}\{#AppName} (modo navegador)"; Filename: "{app}\{#AppExe}"; Parameters: "--browser"; Comment: "Usar si la ventana propia no abre (sin WebView2)"
 Name: "{group}\Desinstalar {#AppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 

@@ -1,14 +1,15 @@
 """Aplicación FastAPI: API REST + archivos estáticos del frontend."""
 
+import hashlib
 import logging
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import config
-from .routers import admin, auth, catalogo, dashboard, inventario, ventas
+from .routers import admin, auth, catalogo, cuentas, dashboard, gastos, inventario, ventas
 from .security import current_user
 from .services import ErrorNegocio
 
@@ -38,7 +39,7 @@ async def _err_general(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"detail": f"Error interno: {exc}"})
 
 
-for r in (auth, catalogo, inventario, ventas, admin, dashboard):
+for r in (auth, catalogo, inventario, ventas, cuentas, gastos, admin, dashboard):
     app.include_router(r.router)
 
 
@@ -58,9 +59,24 @@ async def _no_cache(request: Request, call_next):
     return resp
 
 
+def _token_estaticos() -> str:
+    """Huella del contenido de los archivos del frontend: cambia en cada versión que modifique algo."""
+    h = hashlib.sha1()
+    for p in sorted(config.STATIC_DIR.rglob("*")):
+        if p.is_file():
+            h.update(p.relative_to(config.STATIC_DIR).as_posix().encode())
+            h.update(p.read_bytes())
+    return h.hexdigest()[:10]
+
+
+# Los archivos del frontend se sirven bajo /static/<huella>/…: tras una actualización las rutas cambian y la
+# ventana (WebView2) nunca mezcla JS/CSS viejos guardados en su caché con la versión nueva (el index no se cachea).
+STATIC_TOKEN = _token_estaticos()
+app.mount(f"/static/{STATIC_TOKEN}", StaticFiles(directory=str(config.STATIC_DIR)), name="static-versionado")
 app.mount("/static", StaticFiles(directory=str(config.STATIC_DIR)), name="static")
 
 
 @app.get("/", include_in_schema=False)
 def index():
-    return FileResponse(config.STATIC_DIR / "index.html")
+    html = (config.STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    return HTMLResponse(html.replace('"/static/', f'"/static/{STATIC_TOKEN}/'))

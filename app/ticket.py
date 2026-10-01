@@ -7,7 +7,8 @@ def _m(x, moneda="$"):
     return f"{moneda}{x:,.2f}"
 
 
-def render_ticket(venta: dict, cfg: dict, reimpresion: bool = False) -> str:
+def render_ticket(venta: dict, cfg: dict, reimpresion: bool = False, precuenta: bool = False) -> str:
+    """precuenta=True imprime la cuenta de una mesa abierta (sin pago ni IVA desglosado; no es comprobante)."""
     ancho = "58mm" if str(cfg.get("ancho_ticket", "80")) == "58" else "80mm"
     fuente = "11px" if ancho == "58mm" else "12.5px"
     mon = cfg.get("moneda", "$")
@@ -36,6 +37,8 @@ def render_ticket(venta: dict, cfg: dict, reimpresion: bool = False) -> str:
     rfc = f"<div>RFC: {escape(cfg['rfc'])}</div>" if cfg.get("rfc") else ""
     cancel = '<div class="cancel">*** VENTA CANCELADA ***</div>' if venta["estado"] == "CANCELADA" else ""
     reimp = '<div class="c small">REIMPRESIÓN</div>' if reimpresion else ""
+    if precuenta:
+        reimp = '<div class="cancel">PRE-CUENTA<br><span class="small">No es comprobante de pago</span></div>'
     return f"""<!doctype html><html><head><meta charset="utf-8"><title>{escape(venta["folio"])}</title>
 <style>
  @page {{ size: {ancho} auto; margin: 0; }}
@@ -55,7 +58,7 @@ def render_ticket(venta: dict, cfg: dict, reimpresion: bool = False) -> str:
  <div class="c small">{cabecera}{rfc}</div>
  <hr>
  <div class="small">Folio: <b>{escape(venta["folio"])}</b><br>Fecha: {venta["fecha_hora"]}<br>
- Atendió: {escape(venta["usuario"])}{("<br>Cliente: " + escape(venta["cliente"])) if venta.get("cliente") else ""}</div>
+ {("Mesa: <b>" + escape(venta["mesa"]) + "</b><br>") if venta.get("mesa") else ""}Atendió: {escape(venta["usuario"])}{("<br>Cliente: " + escape(venta["cliente"])) if venta.get("cliente") else ""}</div>
  {reimp}{cancel}
  <hr>
  <table>{filas}</table>
@@ -65,7 +68,7 @@ def render_ticket(venta: dict, cfg: dict, reimpresion: bool = False) -> str:
   {desc}
   <tr class="total"><td>TOTAL</td><td class="r">{_m(venta["total"], mon)}</td></tr>
   {iva}
-  <tr><td>Pago</td><td class="r">{escape(venta["metodo_pago"])}</td></tr>
+  {"" if precuenta else f'<tr><td>Pago</td><td class="r">{escape(venta["metodo_pago"])}</td></tr>'}
   {pago}
  </table>
  <hr>

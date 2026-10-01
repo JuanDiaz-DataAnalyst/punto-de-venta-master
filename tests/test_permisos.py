@@ -17,6 +17,15 @@ SOLO_ADMIN = [
     ("put", "/api/config", {"nombre_negocio": "X"}),
     ("post", "/api/respaldos", None),
     ("post", "/api/exportar/inventario", None),
+    ("get", "/api/gastos-fijos", None),
+    (
+        "post",
+        "/api/gastos-fijos",
+        {"concepto": "Renta", "categoria": "Renta", "monto_mensual": 1, "vigente_desde": HOY},
+    ),
+    ("put", "/api/gastos-fijos/1", {"concepto": "X", "categoria": "Renta", "monto_mensual": 1, "vigente_desde": HOY}),
+    ("delete", "/api/gastos-fijos/1", None),
+    ("post", "/api/gastos-fijos/plantilla", None),
 ]
 
 

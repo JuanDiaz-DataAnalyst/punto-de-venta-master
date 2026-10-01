@@ -36,26 +36,45 @@ la transacción del llamador. Los errores de negocio se lanzan como `ErrorNegoci
 
 ## Flujo de una venta
 
+El cajero abre una cuenta por mesa, agrega consumos durante la estancia (sin tocar inventario) y al final la cobra:
+
 ```mermaid
 sequenceDiagram
     participant C as Cajero (POS)
-    participant A as API /api/ventas
-    participant S as services.registrar_venta
+    participant A as API /api/cuentas/{id}/cobrar
+    participant S as services.cobrar_cuenta
     participant D as SQLite
-    C->>A: items, método de pago, descuento, efectivo recibido
+    C->>A: método de pago, efectivo recibido, cliente
     A->>D: BEGIN IMMEDIATE
-    A->>S: registrar_venta(...)
+    A->>S: cobrar_cuenta(...) → registrar_venta(folio de la cuenta)
     S->>D: valida turno abierto, precios y existencias
-    S->>D: INSERT ventas (folio)
+    S->>D: INSERT ventas (folio, mesa)
     loop por renglón y por insumo de la receta
         S->>D: mover_inventario(BACKFLUSH) → kardex + stock
     end
     S->>D: INSERT fact_ventas (importe, costo, margen)
-    S->>D: audit(VENTA)
+    S->>D: cuentas → COBRADA, audit(VENTA)
     A->>D: COMMIT
     A-->>C: venta con folio, cambio y renglones
     C->>A: GET /ventas/{id}/ticket → imprimir
 ```
+
+`POST /api/ventas` (venta directa sin mesa) sigue disponible para integraciones y pruebas; usa el mismo
+`registrar_venta` y el mismo consecutivo de folios.
+
+## Cuentas abiertas por mesa
+
+Una mesa es una fila de `cuentas` con sus renglones en `cuenta_items`. El folio se toma de un consecutivo
+compartido (`services.siguiente_folio`) al abrir la cuenta; al cobrar, `services.cobrar_cuenta` llama a
+`registrar_venta` con ese mismo folio y la mesa, de modo que el flujo anterior (backflush, costo, margen)
+ocurre en ese momento. `services.mover_consumos` divide una cuenta o pasa consumos a otra mesa (la cuenta nueva trae su
+propio folio); `GET /api/cuentas/{id}/precuenta` imprime la cuenta abierta con `ticket.render_ticket(precuenta=True)`. El estado de las pestañas vive en el servidor: el frontend solo recuerda cuál está activa.
+
+## Gastos fijos
+
+`gastos_fijos` guarda monto mensual y vigencia. `services.prorratear_gastos` los reparte por día
+(monto ÷ días del mes) y el dashboard los resta al margen bruto: utilidad = margen − gastos del periodo,
+punto de equilibrio = gastos ÷ margen %.
 
 ## Frontend
 

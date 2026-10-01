@@ -10,7 +10,7 @@ venv/
 # Empaquetado
 build/
 dist/
-instalador/
+/instalador/
 *-portable.zip
 
 # Datos locales (la app guarda sus datos en %LOCALAPPDATA%, esto es por si se usa POS_DATA_DIR local)
@@ -32,3 +32,7 @@ Thumbs.db
 
 # Claude Code (configuración personal)
 .claude/settings.local.json
+
+# Kit de instalación generado por scripts/empaquetar_kit.py
+kit-instalacion/
+PuntoDeVentaMASTER-kit-*.zip

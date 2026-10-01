@@ -19,6 +19,7 @@ python -m app.main --server                       # solo API; docs en /api/docs
 python -m app.main --browser --demo               # app en navegador con datos de ejemplo (BD vacía)
 POS_DATA_DIR=/tmp/pos python -m app.main --server # usar otra carpeta de datos
 pyinstaller packaging/PuntoDeVenta.spec --noconfirm   # ejecutable (solo en Windows)
+python scripts/empaquetar_kit.py                  # kit de instalación para clientes (kit-instalacion/ + .zip)
 ```
 En Windows: `scripts\build.bat` (lint + pruebas + exe + instalador) y `scripts\dev.bat`.
 
@@ -27,10 +28,15 @@ En Windows: `scripts\build.bat` (lint + pruebas + exe + instalador) y `scripts\d
 - `app/server.py` app FastAPI, manejadores de error, monta `/static`
 - `app/db.py` **esquema completo, vistas analíticas**, `init_db`, `audit`, respaldos
 - `app/services.py` **reglas de negocio**: `registrar_venta` (backflush), `cancelar_venta`,
-  `mover_inventario` (costo promedio ponderado), `registrar_entrada`, `ajustar_inventario`, `resumen_turno`
+  `mover_inventario` (costo promedio ponderado), `registrar_entrada`, `ajustar_inventario`, `resumen_turno`,
+  cuentas por mesa (`abrir_cuenta`, `agregar_item`, `cobrar_cuenta`, `cancelar_cuenta`, `mover_consumos`), `siguiente_folio`,
+  `prorratear_gastos` (gastos fijos por día para el dashboard)
 - `app/routers/*.py` endpoints delgados; validan con Pydantic y llaman a `services`
 - `app/security.py` PBKDF2 + sesiones en memoria; dependencias `current_user` / `require_admin`
 - `app/static/js/app.js` router por hash y layout; `js/views/*.js` una pantalla por archivo; `js/ui.js` helpers
+- `app/static/js/views/ayuda.js` ayuda para el usuario final (F1); al cambiar una función, actualizarla junto con `docs/manual-de-usuario.md`
+- `distribucion/` fuentes del kit de instalación (guías .md, `.bat`); `scripts/empaquetar_kit.py` lo arma y lo convierte a HTML
+- `app/routers/cuentas.py` mesas abiertas · `app/routers/gastos.py` gastos fijos (solo Admin)
 - `tests/conftest.py` fixtures: `client`, `admin`, `cajero`, `catalogo`, `turno`, `vender`, `stock`
 
 ## Reglas de negocio que no se deben romper
@@ -43,6 +49,9 @@ En Windows: `scripts\build.bat` (lint + pruebas + exe + instalador) y `scripts\d
 6. Operaciones con varias escrituras van en una transacción (`with conn:` o `BEGIN IMMEDIATE`).
 7. Acciones relevantes se registran con `db.audit(...)`.
 8. Endpoints de administración usan `Depends(require_admin)`; agregar la prueba en `tests/test_permisos.py`.
+9. Todo folio sale de `services.siguiente_folio` (consecutivo único, nunca se reutiliza). Una cuenta abierta no mueve
+   inventario; el backflush ocurre solo en `cobrar_cuenta` → `registrar_venta`, que conserva el folio de la cuenta.
+10. Los gastos fijos no se guardan por periodo: se prorratean por día con `prorratear_gastos` según su vigencia.
 
 ## Convenciones
 - Commits: Conventional Commits en español (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `build:`, `ci:`).
@@ -50,6 +59,9 @@ En Windows: `scripts\build.bat` (lint + pruebas + exe + instalador) y `scripts\d
 - Cambios de esquema: agregar migración idempotente en `db.init_db` y subir `SCHEMA_VERSION`; nunca borrar
   columnas con datos. Documentar en `docs/modelo-de-datos.md` y `CHANGELOG.md`.
 - Cada bug corregido lleva una prueba que lo reproduce.
+- Versionado: cada PR sube la versión (feat → minor; fix/docs/test/build/ci → patch; incompatible → major) en
+  `app/__init__.py`, `pyproject.toml`, `packaging/installer.iss` y `CHANGELOG.md`; `tests/test_version.py` lo valida.
+  La etiqueta `vX.Y.Z` se crea después del merge a `main` (ver CONTRIBUTING.md).
 - Frontend: escapar todo texto de usuario con `esc()` antes de meterlo a `innerHTML`.
 - Colores de gráficas: usar la paleta validada definida en `js/views/dashboard.js` (no inventar colores).
 

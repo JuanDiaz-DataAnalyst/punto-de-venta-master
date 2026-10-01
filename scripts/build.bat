@@ -65,7 +65,8 @@ goto :fin
 :instalador
 echo.
 echo Generando instalador con Inno Setup...
-"%ISCC%" packaging\installer.iss
+for /f %%v in ('"%VPY%" -c "import app; print(app.__version__)"') do set "VER=%%v"
+"%ISCC%" /DAppVersion=%VER% packaging\installer.iss
 if errorlevel 1 goto :error
 echo Instalador creado en la carpeta "instalador".
 

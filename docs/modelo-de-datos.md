@@ -21,6 +21,9 @@ erDiagram
     entradas_inventario ||--o{ fact_movimientos_inventario : "referencia ENTRADA"
     ventas ||--o{ fact_movimientos_inventario : "referencia VENTA"
     turnos ||--o{ movimientos_caja : turno_id
+    cuentas ||--o{ cuenta_items : cuenta_id
+    cuentas |o--o| ventas : venta_id
+    cuenta_items }o--|| dim_producto : producto_id
 ```
 
 ## Vistas analíticas
@@ -29,7 +32,7 @@ Listas para Power BI (conector ODBC de SQLite) o para consultas directas:
 
 | Vista | Contenido |
 |---|---|
-| `v_ventas_detalle` | `fact_ventas` desnormalizada con fecha, producto, categoría, usuario y método de pago (solo ventas pagadas). |
+| `v_ventas_detalle` | `fact_ventas` desnormalizada con folio, mesa, fecha, producto, categoría, usuario y método de pago (solo ventas pagadas). |
 | `v_inventario_valorizado` | Existencia × costo promedio y estado (`OK`, `BAJO`, `AGOTADO`). |
 | `v_costo_receta` | Costo teórico y margen teórico por producto según su receta. |
 | `v_movimientos_inventario` | Kardex con nombres de insumo y usuario. |
@@ -39,6 +42,10 @@ Listas para Power BI (conector ODBC de SQLite) o para consultas directas:
 - `dim_insumo.stock_actual = SUM(fact_movimientos_inventario.cantidad)` por insumo.
 - `ventas.total = SUM(fact_ventas.importe_neto)` por venta (el descuento se prorratea).
 - `fact_ventas.margen = importe_neto − costo_total`.
+- `ventas.folio` y `cuentas.folio` salen del mismo consecutivo (`config.folio_consecutivo`): nunca se repiten
+  ni se reutilizan. Una cuenta cobrada genera una venta con su mismo folio.
+- A lo mucho una cuenta `ABIERTA` por mesa (índice único parcial, sin distinguir mayúsculas).
+- Las cuentas abiertas no mueven inventario; el backflush ocurre al cobrar (`ventas`).
 - Tipos de movimiento: `INICIAL`, `ENTRADA`, `BACKFLUSH` (venta), `AJUSTE`, `CANCELACION`.
 
 ## Diccionario de datos
@@ -227,6 +234,56 @@ Encabezado del ticket (dimensión degenerada `folio`), estado y cancelación.
 | `motivo_cancelacion` | TEXT | sí |  |
 | `cliente` | TEXT | sí |  |
 | `notas` | TEXT | sí |  |
+| `mesa` | TEXT | sí | mesa de la cuenta de origen (NULL en ventas directas) |
+
+### `cuentas`
+
+Ticket abierto por mesa. El folio se asigna al abrirla; al cobrarse pasa a `COBRADA` y apunta a su `venta_id`.
+
+| Columna | Tipo | Nulo | Llave |
+|---|---|---|---|
+| `cuenta_id` | INTEGER | no | PK |
+| `folio` | TEXT | no | único |
+| `mesa` | TEXT | no |  |
+| `estado` | TEXT | no | `ABIERTA`, `COBRADA`, `CANCELADA` |
+| `abierta_en` | TEXT | no |  |
+| `usuario_id` | INTEGER | no | FK → `dim_usuario.usuario_id` |
+| `descuento_tipo` | TEXT | no | `$` o `%` |
+| `descuento_valor` | REAL | no |  |
+| `cerrada_en` | TEXT | sí |  |
+| `venta_id` | INTEGER | sí | FK → `ventas.venta_id` |
+| `motivo_cancelacion` | TEXT | sí |  |
+
+### `cuenta_items`
+
+Renglones de una cuenta abierta. El precio no se guarda: se lee de `dim_producto` al cobrar.
+
+| Columna | Tipo | Nulo | Llave |
+|---|---|---|---|
+| `item_id` | INTEGER | no | PK |
+| `cuenta_id` | INTEGER | no | FK → `cuentas.cuenta_id` |
+| `producto_id` | INTEGER | no | FK → `dim_producto.producto_id` |
+| `cantidad` | REAL | no |  |
+| `nota` | TEXT | sí |  |
+| `agregado_en` | TEXT | no |  |
+
+### `gastos_fijos`
+
+Gastos mensuales del negocio. El dashboard reparte cada monto entre los días de su mes y suma solo los días
+en que estuvo vigente (`vigente_desde` – `vigente_hasta`). Categorías: Nómina, Renta, Servicios, Mantenimiento,
+Marketing, Administrativos, Impuestos y permisos, Otros.
+
+| Columna | Tipo | Nulo | Llave |
+|---|---|---|---|
+| `gasto_id` | INTEGER | no | PK |
+| `concepto` | TEXT | no |  |
+| `categoria` | TEXT | no |  |
+| `monto_mensual` | REAL | no |  |
+| `vigente_desde` | TEXT | no |  |
+| `vigente_hasta` | TEXT | sí | NULL = sigue vigente |
+| `notas` | TEXT | sí |  |
+| `creado_en` | TEXT | no |  |
+| `actualizado_en` | TEXT | sí |  |
 
 ### `turnos`
 

@@ -15,17 +15,21 @@ y está construido con software gratuito.
 
 ## Funcionalidades
 
-- **Venta rápida**: categorías, búsqueda por código, notas por platillo, descuentos, efectivo con cambio,
-  tarjeta y transferencia, ticket térmico 58/80 mm. Atajos F2 / F9 / F12.
+- **Venta rápida y mesas**: un ticket abierto por mesa en pestañas (varias a la vez), con folio único por ticket;
+  categorías, búsqueda por código, notas por platillo, descuentos, efectivo con cambio, tarjeta y transferencia,
+  pre-cuenta, dividir cuenta o pasar consumos entre mesas, ticket térmico 58/80 mm. Atajos F2 / F4 / F9 / F12.
 - **Backflush automático**: cada venta descuenta los insumos de su receta al costo promedio y guarda el
   costo real (COGS) y el margen por renglón. Cancelar revierte exactamente el consumo.
 - **Inventario**: entradas de material con costo promedio ponderado, ajustes manuales con motivo, conteo
   físico masivo, alertas de mínimo y kardex completo.
 - **Caja**: turnos, fondo inicial, ingresos/retiros y corte con conteo por denominación.
 - **Usuarios** Admin / User con contraseñas cifradas y bitácora de auditoría.
+- **Gastos fijos mensuales** (nómina, renta, luz, agua, gas…) prorrateados por día para calcular utilidad
+  operativa, punto de equilibrio, costo laboral y prime cost.
 - **Dashboard**: KPIs vs. periodo anterior, tendencia, ventas por hora y día, top productos, categorías,
   métodos de pago, **ingeniería de menú**, rentabilidad por producto, cobertura de inventario, merma y
   desempeño por usuario.
+- **Ayuda integrada** (tecla F1) con la guía de operación para el usuario final.
 - **Reportes**: exportación a Excel/CSV, respaldos automáticos y restauración.
 
 | Dashboard | Receta con costo y margen |
@@ -73,7 +77,7 @@ Detalles en [docs/arquitectura.md](docs/arquitectura.md) y [docs/modelo-de-datos
 ```
 app/
   main.py · server.py · config.py      arranque, API, configuración
-  services.py                          reglas de negocio (ventas, backflush, inventario, caja)
+  services.py                          reglas de negocio (ventas, cuentas por mesa, backflush, inventario, caja, gastos fijos)
   db.py                                esquema SQLite, vistas analíticas, respaldos
   security.py · ticket.py · seed.py    autenticación, ticket térmico, datos de ejemplo
   routers/                             endpoints por módulo
@@ -84,6 +88,13 @@ scripts/                               build.bat, dev.bat
 docs/                                  arquitectura, modelo de datos, manual, capturas
 .github/                               CI, build de Windows, plantillas, Dependabot
 ```
+
+## Instalar en computadoras de clientes
+1. Consigue el instalador de Windows: se publica solo en [Releases](https://github.com/JuanDiaz-DataAnalyst/punto-de-venta-master/releases) al subir una etiqueta `vX.Y.Z`
+   (o ejecuta el workflow **Build Windows** en la pestaña Actions).
+2. Genera el kit con `python scripts/empaquetar_kit.py` (opcionalmente `--instalador ruta\Instalar_PuntoDeVentaMASTER_X.Y.Z.exe`).
+   Crea `kit-instalacion/` y un `.zip` con la guía de instalación, el manual, el checklist de entrega, herramientas y el código fuente.
+3. Lleva el kit a la computadora del cliente y sigue `1-Guia-de-instalacion.html`.
 
 ## Hoja de ruta
 - [ ] Modificadores con precio (extra queso +$10) que también descuenten inventario

@@ -127,12 +127,12 @@ def listar_ventas(
         where.append("v.turno_id=?")
         params.append(turno_id)
     if buscar:
-        where.append("(v.folio LIKE ? OR v.cliente LIKE ?)")
-        params += [f"%{buscar}%"] * 2
+        where.append("(v.folio LIKE ? OR v.cliente LIKE ? OR v.mesa LIKE ?)")
+        params += [f"%{buscar}%"] * 3
     rows = [
         dict(r)
         for r in conn.execute(
-            f"""SELECT v.venta_id, v.folio, v.fecha_hora, v.total, v.descuento, v.costo_total, v.estado, v.cliente,
+            f"""SELECT v.venta_id, v.folio, v.mesa, v.fecha_hora, v.total, v.descuento, v.costo_total, v.estado, v.cliente,
                    v.turno_id, u.nombre AS usuario, m.nombre AS metodo_pago,
                    (SELECT SUM(cantidad) FROM fact_ventas f WHERE f.venta_id=v.venta_id) AS articulos
             FROM ventas v JOIN dim_usuario u ON u.usuario_id=v.usuario_id
@@ -231,6 +231,13 @@ def cerrar_turno(data: CerrarTurnoIn, user=Depends(current_user), conn=Depends(g
     t = turno_abierto(conn)
     if not t:
         raise ErrorNegocio("No hay turno abierto")
+    abiertas = [r["mesa"] for r in conn.execute("SELECT mesa FROM cuentas WHERE estado='ABIERTA' ORDER BY cuenta_id")]
+    if abiertas:
+        raise ErrorNegocio(
+            f"Hay {len(abiertas)} cuenta(s) abierta(s): {', '.join(f'«{m}»' for m in abiertas)}. "
+            "Cóbralas o cancélalas antes de cerrar el turno.",
+            409,
+        )
     res = resumen_turno(conn, t["turno_id"])
     esperado = res["efectivo_esperado"]
     dif = round(data.efectivo_contado - esperado, 2)

@@ -1,0 +1,21 @@
+PUNTO DE VENTA MASTER - KIT DE INSTALACION  (version {version})
+==============================================================
+
+Que hay en esta carpeta
+-----------------------
+1-Guia-de-instalacion.html   Pasos para instalar en la computadora del cliente (abrir con el navegador).
+2-Guia-del-usuario.html      Manual de operacion para entregar al cliente. Tambien esta dentro del sistema (tecla F1).
+3-Checklist-de-entrega.html  Lista para imprimir y palomear en cada instalacion.
+instalador\                  Aqui va el instalador de Windows (Instalar_PuntoDeVentaMASTER_*.exe). Ver su LEEME.
+herramientas\                Verificar-equipo.bat (revisa la PC) y Respaldar-datos.bat (copia de seguridad).
+codigo-fuente\               Codigo completo en .zip: sirve para compilar el instalador o instalar sin el.
+
+Resumen en 5 pasos
+------------------
+1. Consigue el instalador (ver instalador\LEEME-instalador.txt) y copialo a una USB junto con esta carpeta.
+2. En la PC del cliente, ejecuta herramientas\Verificar-equipo.bat.
+3. Ejecuta Instalar_PuntoDeVentaMASTER_*.exe y sigue el asistente.
+4. Abre el sistema, crea el administrador y captura menu, gastos fijos y usuarios.
+5. Entrega el manual y llena el checklist.
+
+El sistema funciona SIN internet. Los datos se guardan en %LOCALAPPDATA%\PuntoDeVentaMASTER.

@@ -1,9 +1,10 @@
 """Reglas de negocio: ventas con backflush, inventario (costo promedio ponderado), turnos."""
 
+import calendar
 import math
 import sqlite3
 from collections import defaultdict
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 from .db import audit, ensure_fecha, get_config, now_str
 
@@ -26,6 +27,19 @@ def r4(x: float) -> float:
 
 def _fid(conn, fecha_hora: str) -> int:
     return ensure_fecha(conn, datetime.strptime(fecha_hora[:10], "%Y-%m-%d").date())
+
+
+def siguiente_folio(conn: sqlite3.Connection) -> str:
+    """Folio único y consecutivo, compartido por cuentas abiertas y ventas directas.
+
+    Debe llamarse dentro de una transacción de escritura (BEGIN IMMEDIATE / `with conn:`).
+    Un folio nunca se reutiliza, aunque la cuenta se cancele.
+    """
+    row = conn.execute("SELECT valor FROM config WHERE clave='folio_consecutivo'").fetchone()
+    actual = int(row["valor"]) if row else conn.execute("SELECT COALESCE(MAX(venta_id),0) FROM ventas").fetchone()[0]
+    nuevo = actual + 1
+    conn.execute("INSERT OR REPLACE INTO config(clave, valor) VALUES ('folio_consecutivo', ?)", (str(nuevo),))
+    return f"{get_config(conn).get('folio_prefijo', 'V-')}{nuevo:06d}"
 
 
 # ============================ INVENTARIO ============================
@@ -267,6 +281,8 @@ def registrar_venta(
     fecha_hora: str | None = None,
     turno_id: int | None = None,
     requiere_turno: bool = True,
+    folio: str | None = None,
+    mesa: str | None = None,
 ) -> int:
     if not items:
         raise ErrorNegocio("El ticket está vacío")
@@ -338,12 +354,11 @@ def registrar_venta(
         cambio = 0.0
 
     fid = _fid(conn, fecha_hora)
-    sig = conn.execute("SELECT COALESCE(MAX(venta_id),0)+1 FROM ventas").fetchone()[0]
-    folio = f"{cfg.get('folio_prefijo', 'V-')}{sig:06d}"
+    folio = folio or siguiente_folio(conn)  # las ventas que vienen de una cuenta conservan su folio
     cur = conn.execute(
         """INSERT INTO ventas(folio, fecha_hora, fecha_id, usuario_id, turno_id, metodo_pago_id, subtotal,
-               descuento, total, pago_recibido, cambio, costo_total, estado, cliente, notas)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,0,'PAGADA',?,?)""",
+               descuento, total, pago_recibido, cambio, costo_total, estado, cliente, notas, mesa)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,0,'PAGADA',?,?,?)""",
         (
             folio,
             fecha_hora,
@@ -358,6 +373,7 @@ def registrar_venta(
             cambio,
             cliente,
             notas,
+            mesa,
         ),
     )
     venta_id = cur.lastrowid
@@ -478,3 +494,419 @@ def detalle_venta(conn, venta_id: int) -> dict:
         )
     ]
     return {**dict(v), "lineas": lineas}
+
+
+# ============================ CUENTAS ABIERTAS (MESAS) ============================
+def _descuento_cuenta(tipo: str, valor: float, subtotal: float) -> float:
+    d = subtotal * valor / 100 if tipo == "%" else valor
+    return r2(max(0.0, min(d, subtotal)))
+
+
+def _cuenta(conn, cuenta_id: int, *, abierta: bool = True):
+    c = conn.execute("SELECT * FROM cuentas WHERE cuenta_id=?", (cuenta_id,)).fetchone()
+    if not c:
+        raise ErrorNegocio("Cuenta no encontrada", 404)
+    if abierta and c["estado"] != "ABIERTA":
+        raise ErrorNegocio("Esa cuenta ya no está abierta", 409)
+    return c
+
+
+def detalle_cuenta(conn, cuenta_id: int) -> dict:
+    c = _cuenta(conn, cuenta_id, abierta=False)
+    items = [
+        dict(r)
+        for r in conn.execute(
+            """SELECT i.item_id, i.producto_id, p.nombre, p.precio_venta AS precio, p.activo,
+                      i.cantidad, i.nota, i.agregado_en
+               FROM cuenta_items i JOIN dim_producto p ON p.producto_id = i.producto_id
+               WHERE i.cuenta_id=? ORDER BY i.item_id""",
+            (cuenta_id,),
+        )
+    ]
+    subtotal = r2(sum(i["precio"] * i["cantidad"] for i in items))
+    descuento = _descuento_cuenta(c["descuento_tipo"], c["descuento_valor"], subtotal)
+    usuario = conn.execute("SELECT nombre FROM dim_usuario WHERE usuario_id=?", (c["usuario_id"],)).fetchone()
+    return {
+        **dict(c),
+        "usuario": usuario["nombre"] if usuario else "",
+        "items": items,
+        "articulos": sum(i["cantidad"] for i in items),
+        "subtotal": subtotal,
+        "descuento": descuento,
+        "total": r2(subtotal - descuento),
+    }
+
+
+def listar_cuentas_abiertas(conn) -> list[dict]:
+    ids = [r[0] for r in conn.execute("SELECT cuenta_id FROM cuentas WHERE estado='ABIERTA' ORDER BY cuenta_id")]
+    return [detalle_cuenta(conn, i) for i in ids]
+
+
+def _validar_mesa(conn, mesa: str | None, excluir: int | None = None) -> str:
+    mesa = (mesa or "").strip()
+    if not mesa:
+        raise ErrorNegocio("Indica el número o nombre de la mesa")
+    if len(mesa) > 30:
+        raise ErrorNegocio("El nombre de la mesa es demasiado largo (máximo 30 caracteres)")
+    dup = conn.execute(
+        "SELECT folio FROM cuentas WHERE estado='ABIERTA' AND mesa=? COLLATE NOCASE AND cuenta_id != ?",
+        (mesa, excluir or -1),
+    ).fetchone()
+    if dup:
+        raise ErrorNegocio(f"La mesa «{mesa}» ya tiene una cuenta abierta ({dup['folio']})", 409)
+    return mesa
+
+
+def abrir_cuenta(conn, usuario_id: int, mesa: str, fecha_hora: str | None = None) -> int:
+    """Abre un ticket independiente para una mesa y le asigna su folio único."""
+    if not turno_abierto(conn):
+        raise ErrorNegocio("No hay un turno de caja abierto. Abre la caja antes de abrir cuentas.", 409)
+    mesa = _validar_mesa(conn, mesa)
+    fecha_hora = fecha_hora or now_str()
+    folio = siguiente_folio(conn)
+    cur = conn.execute(
+        "INSERT INTO cuentas(folio, mesa, abierta_en, usuario_id) VALUES (?,?,?,?)",
+        (folio, mesa, fecha_hora, usuario_id),
+    )
+    audit(conn, usuario_id, "ABRIR_CUENTA", "cuentas", cur.lastrowid, f"{folio} mesa {mesa}", fecha_hora)
+    return cur.lastrowid
+
+
+def agregar_item(
+    conn, cuenta_id: int, producto_id: int, cantidad: float = 1, nota: str | None = None, fecha_hora: str | None = None
+) -> None:
+    """Suma un producto a la cuenta (si ya hay uno igual y con la misma nota, aumenta la cantidad)."""
+    _cuenta(conn, cuenta_id)
+    if cantidad <= 0:
+        raise ErrorNegocio("Cantidad inválida")
+    if not conn.execute("SELECT 1 FROM dim_producto WHERE producto_id=? AND activo=1", (producto_id,)).fetchone():
+        raise ErrorNegocio(f"Producto {producto_id} no disponible")
+    _sumar_item(conn, cuenta_id, producto_id, cantidad, (nota or "").strip() or None, fecha_hora or now_str())
+
+
+def _sumar_item(conn, cuenta_id: int, producto_id: int, cantidad: float, nota: str | None, agregado_en: str) -> None:
+    """Agrega piezas a la cuenta; si ya hay un renglón igual (mismo producto y nota) las suma a ese."""
+    existente = conn.execute(
+        "SELECT item_id FROM cuenta_items WHERE cuenta_id=? AND producto_id=? AND COALESCE(nota,'')=COALESCE(?,'')",
+        (cuenta_id, producto_id, nota),
+    ).fetchone()
+    if existente:
+        conn.execute(
+            "UPDATE cuenta_items SET cantidad = cantidad + ? WHERE item_id=?", (cantidad, existente["item_id"])
+        )
+    else:
+        conn.execute(
+            "INSERT INTO cuenta_items(cuenta_id, producto_id, cantidad, nota, agregado_en) VALUES (?,?,?,?,?)",
+            (cuenta_id, producto_id, cantidad, nota, agregado_en),
+        )
+
+
+def modificar_item(
+    conn,
+    cuenta_id: int,
+    item_id: int,
+    cantidad: float | None = None,
+    nota: str | None = None,
+    separar: bool = False,
+) -> None:
+    """Cambia cantidad y/o nota de un renglón. cantidad <= 0 lo quita.
+
+    nota: None = sin cambio, "" = borrar nota. Con separar=True y varias piezas, la nota
+    se aplica solo a una pieza (que pasa a un renglón nuevo).
+    """
+    _cuenta(conn, cuenta_id)
+    it = conn.execute("SELECT * FROM cuenta_items WHERE item_id=? AND cuenta_id=?", (item_id, cuenta_id)).fetchone()
+    if not it:
+        raise ErrorNegocio("Renglón no encontrado", 404)
+    cant = it["cantidad"] if cantidad is None else float(cantidad)
+    if cant <= 0:
+        conn.execute("DELETE FROM cuenta_items WHERE item_id=?", (item_id,))
+        return
+    if nota is not None:
+        nota = nota.strip() or None
+        if separar and cant > 1 and nota and nota != it["nota"]:
+            conn.execute("UPDATE cuenta_items SET cantidad=? WHERE item_id=?", (cant - 1, item_id))
+            conn.execute(
+                "INSERT INTO cuenta_items(cuenta_id, producto_id, cantidad, nota, agregado_en) VALUES (?,?,?,?,?)",
+                (cuenta_id, it["producto_id"], 1, nota, now_str()),
+            )
+            return
+        conn.execute("UPDATE cuenta_items SET nota=? WHERE item_id=?", (nota, item_id))
+    conn.execute("UPDATE cuenta_items SET cantidad=? WHERE item_id=?", (cant, item_id))
+
+
+def actualizar_cuenta(
+    conn,
+    cuenta_id: int,
+    usuario_id: int,
+    mesa: str | None = None,
+    descuento_tipo: str | None = None,
+    descuento_valor: float | None = None,
+) -> None:
+    c = _cuenta(conn, cuenta_id)
+    if mesa is not None:
+        nueva = _validar_mesa(conn, mesa, excluir=cuenta_id)
+        if nueva != c["mesa"]:
+            conn.execute("UPDATE cuentas SET mesa=? WHERE cuenta_id=?", (nueva, cuenta_id))
+            audit(conn, usuario_id, "CAMBIAR_MESA", "cuentas", cuenta_id, f"{c['folio']}: {c['mesa']} -> {nueva}")
+    if descuento_tipo is not None or descuento_valor is not None:
+        tipo = descuento_tipo or c["descuento_tipo"]
+        valor = c["descuento_valor"] if descuento_valor is None else float(descuento_valor)
+        if tipo not in ("$", "%") or valor < 0 or (tipo == "%" and valor > 100):
+            raise ErrorNegocio("Descuento inválido")
+        conn.execute(
+            "UPDATE cuentas SET descuento_tipo=?, descuento_valor=? WHERE cuenta_id=?", (tipo, valor, cuenta_id)
+        )
+        if valor != c["descuento_valor"] or tipo != c["descuento_tipo"]:
+            audit(conn, usuario_id, "DESCUENTO_CUENTA", "cuentas", cuenta_id, f"{c['folio']}: {valor}{tipo}")
+
+
+def mover_consumos(
+    conn,
+    cuenta_id: int,
+    usuario_id: int,
+    items: list[dict],
+    destino_cuenta_id: int | None = None,
+    destino_mesa: str | None = None,
+    fecha_hora: str | None = None,
+) -> tuple[int, int]:
+    """Pasa consumos de una cuenta abierta a otra mesa abierta o a una cuenta nueva (dividir la cuenta).
+
+    items: [{"item_id", "cantidad"}] (se pueden mover solo algunas piezas de un renglón).
+    Con destino_mesa se abre una cuenta nueva (con su propio folio). El descuento se queda en la cuenta de origen.
+    Regresa (cuenta_origen_id, cuenta_destino_id).
+    """
+    if (destino_cuenta_id is None) == (not (destino_mesa or "").strip()):
+        raise ErrorNegocio("Elige una mesa abierta de destino o escribe el nombre de la cuenta nueva")
+    origen = _cuenta(conn, cuenta_id)
+    pedidas: dict[int, float] = {}
+    for it in items:
+        cant = float(it.get("cantidad") or 0)
+        if cant < 0:
+            raise ErrorNegocio("Cantidad inválida")
+        if cant > 0:
+            pedidas[int(it["item_id"])] = pedidas.get(int(it["item_id"]), 0) + cant
+    if not pedidas:
+        raise ErrorNegocio("Elige al menos un producto para mover")
+    renglones = {
+        r["item_id"]: r for r in conn.execute("SELECT * FROM cuenta_items WHERE cuenta_id=?", (cuenta_id,)).fetchall()
+    }
+    for item_id, cant in pedidas.items():
+        if item_id not in renglones:
+            raise ErrorNegocio("Renglón no encontrado", 404)
+        if cant > renglones[item_id]["cantidad"] + 1e-9:
+            raise ErrorNegocio("No puedes mover más piezas de las que tiene la cuenta")
+    if destino_cuenta_id is not None:
+        if destino_cuenta_id == cuenta_id:
+            raise ErrorNegocio("La cuenta de destino debe ser otra")
+        destino = _cuenta(conn, destino_cuenta_id)
+        destino_id = destino["cuenta_id"]
+    else:
+        destino_id = abrir_cuenta(conn, usuario_id, destino_mesa, fecha_hora)
+        destino = _cuenta(conn, destino_id)
+    piezas = 0.0
+    for item_id, cant in pedidas.items():
+        r = renglones[item_id]
+        resto = r["cantidad"] - cant
+        if resto <= 1e-9:
+            conn.execute("DELETE FROM cuenta_items WHERE item_id=?", (item_id,))
+        else:
+            conn.execute("UPDATE cuenta_items SET cantidad=? WHERE item_id=?", (resto, item_id))
+        _sumar_item(conn, destino_id, r["producto_id"], cant, r["nota"], r["agregado_en"])
+        piezas += cant
+    audit(
+        conn,
+        usuario_id,
+        "MOVER_CONSUMOS",
+        "cuentas",
+        cuenta_id,
+        f"{piezas:g} piezas de {origen['folio']} (mesa {origen['mesa']}) a {destino['folio']} (mesa {destino['mesa']})",
+        fecha_hora,
+    )
+    return cuenta_id, destino_id
+
+
+def cobrar_cuenta(
+    conn,
+    cuenta_id: int,
+    usuario_id: int,
+    metodo_pago_id: int,
+    pago_recibido: float | None = None,
+    cliente: str | None = None,
+    notas: str | None = None,
+    fecha_hora: str | None = None,
+) -> int:
+    """Convierte la cuenta en una venta (con el mismo folio): aquí se hace el backflush de inventario."""
+    c = _cuenta(conn, cuenta_id)
+    det = detalle_cuenta(conn, cuenta_id)
+    if not det["items"]:
+        raise ErrorNegocio("La cuenta está vacía; agrega productos o cancélala")
+    fecha_hora = fecha_hora or now_str()
+    venta_id = registrar_venta(
+        conn,
+        usuario_id,
+        [{"producto_id": i["producto_id"], "cantidad": i["cantidad"], "nota": i["nota"]} for i in det["items"]],
+        metodo_pago_id,
+        det["descuento"],
+        pago_recibido,
+        cliente,
+        notas,
+        fecha_hora,
+        folio=c["folio"],
+        mesa=c["mesa"],
+    )
+    conn.execute(
+        "UPDATE cuentas SET estado='COBRADA', cerrada_en=?, venta_id=? WHERE cuenta_id=?",
+        (fecha_hora, venta_id, cuenta_id),
+    )
+    return venta_id
+
+
+def cancelar_cuenta(conn, cuenta_id: int, usuario_id: int, motivo: str | None, fecha_hora: str | None = None) -> None:
+    """Cancela una cuenta abierta (no hay venta ni movimiento de inventario que revertir)."""
+    c = _cuenta(conn, cuenta_id)
+    det = detalle_cuenta(conn, cuenta_id)
+    motivo = (motivo or "").strip()
+    if det["items"] and len(motivo) < 3:
+        raise ErrorNegocio("Indica el motivo de la cancelación")
+    ahora = fecha_hora or now_str()
+    conn.execute(
+        "UPDATE cuentas SET estado='CANCELADA', cerrada_en=?, motivo_cancelacion=? WHERE cuenta_id=?",
+        (ahora, motivo or None, cuenta_id),
+    )
+    audit(
+        conn,
+        usuario_id,
+        "CANCELAR_CUENTA",
+        "cuentas",
+        cuenta_id,
+        f"{c['folio']} mesa {c['mesa']}: {det['articulos']:g} artículos, {det['total']} - {motivo or 'sin consumo'}",
+        ahora,
+    )
+
+
+# ============================ GASTOS FIJOS ============================
+CATEGORIA_NOMINA = "Nómina"
+CATEGORIAS_GASTO = [
+    CATEGORIA_NOMINA,
+    "Renta",
+    "Servicios",
+    "Mantenimiento",
+    "Marketing",
+    "Administrativos",
+    "Impuestos y permisos",
+    "Otros",
+]
+
+# Conceptos comunes de un restaurante pequeño (se cargan con monto $0 para que el dueño los capture)
+GASTOS_COMUNES = [
+    ("Salarios de cocina", CATEGORIA_NOMINA),
+    ("Salarios de meseros / servicio", CATEGORIA_NOMINA),
+    ("Salario del encargado o administrador", CATEGORIA_NOMINA),
+    ("Cargas sociales (IMSS, INFONAVIT, SAR)", CATEGORIA_NOMINA),
+    ("Aguinaldo y prestaciones (provisión mensual)", CATEGORIA_NOMINA),
+    ("Renta del local", "Renta"),
+    ("Electricidad", "Servicios"),
+    ("Agua", "Servicios"),
+    ("Gas", "Servicios"),
+    ("Internet y teléfono", "Servicios"),
+    ("Recolección de basura", "Servicios"),
+    ("Mantenimiento de equipo y local", "Mantenimiento"),
+    ("Limpieza y control de plagas", "Mantenimiento"),
+    ("Publicidad y redes sociales", "Marketing"),
+    ("Contador", "Administrativos"),
+    ("Software y sistemas", "Administrativos"),
+    ("Seguros", "Administrativos"),
+    ("Licencias y permisos", "Impuestos y permisos"),
+    ("Impuestos (predial, ISR)", "Impuestos y permisos"),
+]
+
+
+def _validar_fecha(valor: str | None, campo: str) -> str | None:
+    if not valor:
+        return None
+    try:
+        return date.fromisoformat(valor).isoformat()
+    except ValueError as e:
+        raise ErrorNegocio(f"{campo}: fecha inválida (usa AAAA-MM-DD)") from e
+
+
+def validar_gasto(
+    concepto: str, categoria: str, vigente_desde: str, vigente_hasta: str | None
+) -> tuple[str, str, str, str | None]:
+    concepto = (concepto or "").strip()
+    if not concepto:
+        raise ErrorNegocio("Indica el concepto del gasto")
+    if categoria not in CATEGORIAS_GASTO:
+        raise ErrorNegocio("Categoría de gasto inválida")
+    desde = _validar_fecha(vigente_desde, "Vigente desde")
+    if not desde:
+        raise ErrorNegocio("Indica desde cuándo aplica el gasto")
+    hasta = _validar_fecha(vigente_hasta, "Vigente hasta")
+    if hasta and hasta < desde:
+        raise ErrorNegocio("«Vigente hasta» no puede ser anterior a «Vigente desde»")
+    return concepto, categoria, desde, hasta
+
+
+def prorratear_gastos(conn, desde: date, hasta: date) -> dict:
+    """Gastos fijos que corresponden al rango [desde, hasta].
+
+    Cada gasto mensual se reparte en partes iguales entre los días de su mes y se suman solo
+    los días en que estuvo vigente; así un rango de 7 días o de 3 meses recibe lo justo.
+    """
+    gastos = conn.execute("SELECT * FROM gastos_fijos WHERE monto_mensual > 0 ORDER BY categoria, concepto").fetchall()
+    dias_mes: dict[tuple[int, int], int] = {}
+    diario: dict[str, float] = defaultdict(float)
+    detalle = []
+    for g in gastos:
+        ini = max(desde, date.fromisoformat(g["vigente_desde"]))
+        fin = min(hasta, date.fromisoformat(g["vigente_hasta"])) if g["vigente_hasta"] else hasta
+        monto = 0.0
+        d = ini
+        while d <= fin:
+            n = dias_mes.setdefault((d.year, d.month), calendar.monthrange(d.year, d.month)[1])
+            parte = g["monto_mensual"] / n
+            diario[d.isoformat()] += parte
+            monto += parte
+            d += timedelta(days=1)
+        if monto > 0:
+            detalle.append(
+                {
+                    "gasto_id": g["gasto_id"],
+                    "concepto": g["concepto"],
+                    "categoria": g["categoria"],
+                    "monto_mensual": g["monto_mensual"],
+                    "monto": r2(monto),
+                }
+            )
+    por_cat: dict[str, float] = defaultdict(float)
+    for x in detalle:
+        por_cat[x["categoria"]] += x["monto"]
+    por_categoria = sorted(({"categoria": c, "monto": r2(m)} for c, m in por_cat.items()), key=lambda x: -x["monto"])
+    return {
+        "total": r2(sum(por_cat.values())),
+        "por_categoria": por_categoria,
+        "detalle": sorted(detalle, key=lambda x: -x["monto"]),
+        "diario": dict(diario),
+        "configurado": bool(gastos),
+    }
+
+
+def resumen_gastos_fijos(conn, hoy: date | None = None) -> dict:
+    """Lo que cuesta mantener el negocio abierto un mes, con los gastos vigentes a la fecha."""
+    hoy = hoy or date.today()
+    vigentes = conn.execute(
+        """SELECT categoria, SUM(monto_mensual) AS monto FROM gastos_fijos
+           WHERE vigente_desde <= ? AND (vigente_hasta IS NULL OR vigente_hasta >= ?) GROUP BY categoria""",
+        (hoy.isoformat(), hoy.isoformat()),
+    ).fetchall()
+    por_categoria = sorted(
+        ({"categoria": r["categoria"], "monto": r2(r["monto"])} for r in vigentes), key=lambda x: -x["monto"]
+    )
+    total = r2(sum(c["monto"] for c in por_categoria))
+    return {
+        "total_mensual": total,
+        "total_diario": r2(total / calendar.monthrange(hoy.year, hoy.month)[1]),
+        "por_categoria": por_categoria,
+        "nomina_mensual": next((c["monto"] for c in por_categoria if c["categoria"] == CATEGORIA_NOMINA), 0.0),
+    }
