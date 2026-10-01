@@ -10,7 +10,7 @@ venv/
 # Empaquetado
 build/
 dist/
-instalador/
+/instalador/
 *-portable.zip
 
 # Datos locales (la app guarda sus datos en %LOCALAPPDATA%, esto es por si se usa POS_DATA_DIR local)
