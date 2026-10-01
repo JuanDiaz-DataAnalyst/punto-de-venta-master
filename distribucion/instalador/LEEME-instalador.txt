@@ -1,0 +1,14 @@
+INSTALADOR DE WINDOWS
+=====================
+Copia aqui el archivo  Instalar_PuntoDeVentaMASTER_X.Y.Z.exe  (y, si quieres, PuntoDeVentaMASTER-X.Y.Z-portable.zip).
+
+De donde sale
+-------------
+A) GitHub Releases (recomendado): https://github.com/JuanDiaz-DataAnalyst/punto-de-venta-master/releases
+   Al subir una etiqueta vX.Y.Z el repositorio compila y publica el instalador automaticamente.
+B) GitHub Actions: pestana Actions -> "Build Windows" -> Run workflow -> al terminar, descarga el artefacto
+   "PuntoDeVentaMASTER-windows" (contiene el .exe y el .zip portable).
+C) Compilarlo tu mismo en una PC con Windows: extrae codigo-fuente\*.zip y ejecuta scripts\build.bat
+   (necesita Python 3.12 e Inno Setup 6; el resultado queda en la carpeta "instalador").
+
+Un solo instalador sirve para todas las computadoras (Windows 10/11, 64 bits). No hace falta Python en el equipo del cliente.
