@@ -30,6 +30,9 @@ Todos los cambios relevantes se documentan aquí. Formato basado en
 - El instalador agrega el acceso «Punto de Venta MASTER (modo navegador)» para equipos sin WebView2.
 
 ### Corregido
+- Tras actualizar el sistema, la ventana podía mostrar «The requested module '../api.js' does not provide an export named …»
+  por mezclar archivos JS viejos guardados en su caché con los nuevos. Ahora el frontend se sirve bajo `/static/<huella>/…`,
+  donde la huella cambia con cada versión, y el index nunca se cachea.
 - Cerrar sesión desde cualquier pantalla ya no provoca un error de JavaScript en la consola.
 
 ### Cambiado
